@@ -1,0 +1,96 @@
+2023-05-24 14:28:29.344 | INFO     | Namespace(seed=0, rounds=5, rank=20, window=12, channels=32, model='LTP', narys=2, beam=25, qtype=['user', 'item'], ktype=['time'], density=0.1, num_users=12, num_items=12, num_times=3000, dataset='abilene', bs=256, lr=0.001, epochs=100, patience=5, device='cpu')
+2023-05-24 14:28:30.524 | INFO     | Round=0 Epoch=00 Loss=0.0499 vNRMSE=0.4689 vNMAE=0.5605
+2023-05-24 14:28:31.383 | INFO     | Round=0 Epoch=01 Loss=0.0050 vNRMSE=0.3364 vNMAE=0.3818
+2023-05-24 14:28:32.227 | INFO     | Round=0 Epoch=02 Loss=0.0034 vNRMSE=0.3138 vNMAE=0.3426
+2023-05-24 14:28:33.066 | INFO     | Round=0 Epoch=03 Loss=0.0030 vNRMSE=0.3021 vNMAE=0.3168
+2023-05-24 14:28:33.904 | INFO     | Round=0 Epoch=04 Loss=0.0027 vNRMSE=0.2869 vNMAE=0.2921
+2023-05-24 14:28:34.739 | INFO     | Round=0 Epoch=05 Loss=0.0025 vNRMSE=0.2803 vNMAE=0.2779
+2023-05-24 14:28:35.590 | INFO     | Round=0 Epoch=06 Loss=0.0023 vNRMSE=0.2764 vNMAE=0.2781
+2023-05-24 14:28:36.462 | INFO     | Round=0 Epoch=07 Loss=0.0022 vNRMSE=0.2668 vNMAE=0.2650
+2023-05-24 14:28:37.356 | INFO     | Round=0 Epoch=08 Loss=0.0020 vNRMSE=0.2685 vNMAE=0.2674
+2023-05-24 14:28:38.216 | INFO     | Round=0 Epoch=09 Loss=0.0020 vNRMSE=0.2595 vNMAE=0.2570
+2023-05-24 14:28:39.066 | INFO     | Round=0 Epoch=10 Loss=0.0019 vNRMSE=0.2632 vNMAE=0.2664
+2023-05-24 14:28:39.917 | INFO     | Round=0 Epoch=11 Loss=0.0018 vNRMSE=0.2556 vNMAE=0.2500
+2023-05-24 14:28:40.792 | INFO     | Round=0 Epoch=12 Loss=0.0017 vNRMSE=0.2609 vNMAE=0.2534
+2023-05-24 14:28:41.684 | INFO     | Round=0 Epoch=13 Loss=0.0016 vNRMSE=0.2575 vNMAE=0.2529
+2023-05-24 14:28:42.569 | INFO     | Round=0 Epoch=14 Loss=0.0016 vNRMSE=0.2541 vNMAE=0.2460
+2023-05-24 14:28:43.454 | INFO     | Round=0 Epoch=15 Loss=0.0015 vNRMSE=0.2509 vNMAE=0.2504
+2023-05-24 14:28:44.335 | INFO     | Round=0 Epoch=16 Loss=0.0015 vNRMSE=0.2506 vNMAE=0.2489
+2023-05-24 14:28:45.233 | INFO     | Round=0 Epoch=17 Loss=0.0014 vNRMSE=0.2518 vNMAE=0.2470
+2023-05-24 14:28:46.115 | INFO     | Round=0 Epoch=18 Loss=0.0014 vNRMSE=0.2476 vNMAE=0.2378
+2023-05-24 14:28:47.040 | INFO     | Round=0 Epoch=19 Loss=0.0013 vNRMSE=0.2454 vNMAE=0.2373
+2023-05-24 14:28:48.037 | INFO     | Round=0 Epoch=20 Loss=0.0013 vNRMSE=0.2448 vNMAE=0.2363
+2023-05-24 14:28:49.019 | INFO     | Round=0 Epoch=21 Loss=0.0012 vNRMSE=0.2466 vNMAE=0.2417
+2023-05-24 14:28:50.012 | INFO     | Round=0 Epoch=22 Loss=0.0012 vNRMSE=0.2520 vNMAE=0.2416
+2023-05-24 14:28:50.933 | INFO     | Round=0 Epoch=23 Loss=0.0012 vNRMSE=0.2442 vNMAE=0.2340
+2023-05-24 14:28:51.954 | INFO     | Round=0 Epoch=24 Loss=0.0011 vNRMSE=0.2463 vNMAE=0.2378
+2023-05-24 14:28:52.875 | INFO     | Round=0 Epoch=25 Loss=0.0011 vNRMSE=0.2422 vNMAE=0.2281
+2023-05-24 14:28:53.869 | INFO     | Round=0 Epoch=26 Loss=0.0011 vNRMSE=0.2429 vNMAE=0.2337
+2023-05-24 14:28:54.796 | INFO     | Round=0 Epoch=27 Loss=0.0011 vNRMSE=0.2426 vNMAE=0.2275
+2023-05-24 14:28:55.701 | INFO     | Round=0 Epoch=28 Loss=0.0010 vNRMSE=0.2398 vNMAE=0.2275
+2023-05-24 14:28:56.671 | INFO     | Round=0 Epoch=29 Loss=0.0010 vNRMSE=0.2458 vNMAE=0.2303
+2023-05-24 14:28:57.603 | INFO     | Round=0 Epoch=30 Loss=0.0010 vNRMSE=0.2421 vNMAE=0.2290
+2023-05-24 14:28:58.522 | INFO     | Round=0 Epoch=31 Loss=0.0010 vNRMSE=0.2455 vNMAE=0.2266
+2023-05-24 14:28:59.460 | INFO     | Round=0 Epoch=32 Loss=0.0010 vNRMSE=0.2420 vNMAE=0.2259
+2023-05-24 14:29:00.436 | INFO     | Round=0 Epoch=33 Loss=0.0009 vNRMSE=0.2444 vNMAE=0.2278
+2023-05-24 14:29:03.005 | INFO     | Round=0 tNRMSE=0.2500 tNMAE=0.2305
+2023-05-24 14:29:06.567 | INFO     | ************************************************************
+2023-05-24 14:29:06.567 | INFO     | Round=0 Brute Force Retrieval Performance
+2023-05-24 14:29:06.567 | INFO     | Round=0 Top20  Recall=0.0552 Precision=0.0552 F-Measure=0.0552
+2023-05-24 14:29:06.567 | INFO     | Round=0 Top50  Recall=0.0876 Precision=0.0876 F-Measure=0.0876
+2023-05-24 14:29:06.567 | INFO     | Round=0 Top100 Recall=0.1317 Precision=0.1317 F-Measure=0.1317
+2023-05-24 14:29:06.568 | INFO     | ************************************************************
+2023-05-24 14:29:08.425 | INFO     | ************************************************************
+2023-05-24 14:29:08.426 | INFO     | Round=0 Tree Indexer Retrieval Performance
+2023-05-24 14:29:08.426 | INFO     | Round=0 Top20  Recall=0.0215 Precision=0.0215 F-Measure=0.0215
+2023-05-24 14:29:08.426 | INFO     | Round=0 Top50  Recall=0.0478 Precision=0.0478 F-Measure=0.0478
+2023-05-24 14:29:08.427 | INFO     | Round=0 Top100 Recall=0.0937 Precision=0.0937 F-Measure=0.0937
+2023-05-24 14:29:08.427 | INFO     | ************************************************************
+2023-05-24 14:29:18.602 | INFO     | ************************************************************
+2023-05-24 14:29:18.602 | INFO     | Round=0 Tree Indexer Retrieval Performance
+2023-05-24 14:29:18.602 | INFO     | Round=0 Top20  Recall=0.0240 Precision=0.0240 F-Measure=0.0240
+2023-05-24 14:29:18.603 | INFO     | Round=0 Top50  Recall=0.0563 Precision=0.0563 F-Measure=0.0562
+2023-05-24 14:29:18.603 | INFO     | Round=0 Top100 Recall=0.1063 Precision=0.1063 F-Measure=0.1062
+2023-05-24 14:29:18.603 | INFO     | ************************************************************
+2023-05-24 14:29:29.447 | INFO     | ************************************************************
+2023-05-24 14:29:29.447 | INFO     | Round=0 Tree Indexer Retrieval Performance
+2023-05-24 14:29:29.448 | INFO     | Round=0 Top20  Recall=0.0330 Precision=0.0330 F-Measure=0.0330
+2023-05-24 14:29:29.448 | INFO     | Round=0 Top50  Recall=0.0692 Precision=0.0692 F-Measure=0.0692
+2023-05-24 14:29:29.448 | INFO     | Round=0 Top100 Recall=0.1203 Precision=0.1203 F-Measure=0.1203
+2023-05-24 14:29:29.448 | INFO     | ************************************************************
+2023-05-24 14:29:40.868 | INFO     | ************************************************************
+2023-05-24 14:29:40.868 | INFO     | Round=0 Tree Indexer Retrieval Performance
+2023-05-24 14:29:40.868 | INFO     | Round=0 Top20  Recall=0.0427 Precision=0.0427 F-Measure=0.0427
+2023-05-24 14:29:40.868 | INFO     | Round=0 Top50  Recall=0.0744 Precision=0.0744 F-Measure=0.0744
+2023-05-24 14:29:40.868 | INFO     | Round=0 Top100 Recall=0.1205 Precision=0.1205 F-Measure=0.1205
+2023-05-24 14:29:40.869 | INFO     | ************************************************************
+2023-05-24 14:29:52.232 | INFO     | ************************************************************
+2023-05-24 14:29:52.232 | INFO     | Round=0 Tree Indexer Retrieval Performance
+2023-05-24 14:29:52.232 | INFO     | Round=0 Top20  Recall=0.0392 Precision=0.0392 F-Measure=0.0392
+2023-05-24 14:29:52.233 | INFO     | Round=0 Top50  Recall=0.0762 Precision=0.0762 F-Measure=0.0762
+2023-05-24 14:29:52.233 | INFO     | Round=0 Top100 Recall=0.1231 Precision=0.1231 F-Measure=0.1231
+2023-05-24 14:29:52.233 | INFO     | ************************************************************
+2023-05-24 14:30:03.459 | INFO     | ************************************************************
+2023-05-24 14:30:03.459 | INFO     | Round=0 Tree Indexer Retrieval Performance
+2023-05-24 14:30:03.459 | INFO     | Round=0 Top20  Recall=0.0399 Precision=0.0399 F-Measure=0.0399
+2023-05-24 14:30:03.460 | INFO     | Round=0 Top50  Recall=0.0806 Precision=0.0806 F-Measure=0.0806
+2023-05-24 14:30:03.460 | INFO     | Round=0 Top100 Recall=0.1309 Precision=0.1309 F-Measure=0.1309
+2023-05-24 14:30:03.460 | INFO     | ************************************************************
+2023-05-24 14:30:14.980 | INFO     | ************************************************************
+2023-05-24 14:30:14.980 | INFO     | Round=0 Tree Indexer Retrieval Performance
+2023-05-24 14:30:14.980 | INFO     | Round=0 Top20  Recall=0.0417 Precision=0.0417 F-Measure=0.0417
+2023-05-24 14:30:14.981 | INFO     | Round=0 Top50  Recall=0.0796 Precision=0.0796 F-Measure=0.0796
+2023-05-24 14:30:14.981 | INFO     | Round=0 Top100 Recall=0.1319 Precision=0.1319 F-Measure=0.1319
+2023-05-24 14:30:14.981 | INFO     | ************************************************************
+2023-05-24 14:30:26.529 | INFO     | ************************************************************
+2023-05-24 14:30:26.529 | INFO     | Round=0 Tree Indexer Retrieval Performance
+2023-05-24 14:30:26.529 | INFO     | Round=0 Top20  Recall=0.0375 Precision=0.0375 F-Measure=0.0375
+2023-05-24 14:30:26.529 | INFO     | Round=0 Top50  Recall=0.0781 Precision=0.0781 F-Measure=0.0781
+2023-05-24 14:30:26.530 | INFO     | Round=0 Top100 Recall=0.1319 Precision=0.1319 F-Measure=0.1319
+2023-05-24 14:30:26.530 | INFO     | ************************************************************
+2023-05-24 14:30:38.122 | INFO     | ************************************************************
+2023-05-24 14:30:38.122 | INFO     | Round=0 Tree Indexer Retrieval Performance
+2023-05-24 14:30:38.123 | INFO     | Round=0 Top20  Recall=0.0375 Precision=0.0375 F-Measure=0.0375
+2023-05-24 14:30:38.123 | INFO     | Round=0 Top50  Recall=0.0743 Precision=0.0743 F-Measure=0.0743
+2023-05-24 14:30:38.123 | INFO     | Round=0 Top100 Recall=0.1288 Precision=0.1288 F-Measure=0.1287
+2023-05-24 14:30:38.123 | INFO     | ************************************************************
