@@ -51,8 +51,13 @@ class RankMetrics:
         trueSet = np.argsort(self.fullTensor[query])[::-1][:self.topk]
 
         # convert to list
+
         trueSet = trueSet.tolist()
-        predSet = predSet.numpy().tolist()
+
+        if isinstance(predSet, torch.Tensor):
+            predSet = predSet.cpu().numpy().tolist()
+        elif isinstance(predSet, np.ndarray):
+            predSet = predSet.tolist()
 
         recall = len(set(trueSet) & set(predSet)) / self.topk
         precision = len(set(trueSet) & set(predSet)) / len(set(predSet))

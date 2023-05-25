@@ -1,0 +1,9 @@
+# write gitignore so that i can exclude any log file and model parameter
+
+*.pyc
+*.iml
+*.DS_Store
+*.xml
+*.json
+*.pt
+*.log
