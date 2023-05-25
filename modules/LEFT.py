@@ -191,6 +191,12 @@ class LEFT(Module):
         # Loss
         self.loss = MSELoss()
 
+        # Cache
+        self.cache = {
+            "QIndex0": {},
+            "QIndex1": {}
+        }
+
 
     def _setup_index_tree(self):
 
@@ -219,7 +225,7 @@ class LEFT(Module):
 
     def setup_optimizer(self):
         self.meta_tcom.setup_optimizer()
-        self.tree_opt = t.optim.AdamW(self.tree_embs.parameters(), lr=0.01)
+        self.tree_opt = t.optim.AdamW(self.tree_embs.parameters(), lr=0.02)
         # self.opt_scheduler = t.optim.lr_scheduler.CosineAnnealingWarmRestarts(self.tree_opt, T_0=60, T_mult=1, eta_min=1e-3)
 
 
@@ -284,7 +290,6 @@ class LEFT(Module):
             raise NotImplementedError('only support search no more than two dimension!')
 
 
-
     @t.no_grad()
     def beam_search(self, q_index, beam):
 
@@ -297,6 +302,7 @@ class LEFT(Module):
 
             new_queue = self.tree.get_children(queue)
             if len(new_queue) > beam:
+                queue = new_queue
                 break
             else:
                 queue = new_queue
@@ -319,14 +325,14 @@ class LEFT(Module):
             # search childrens and sort
             childrens = self.tree.get_children(treeNode)
 
-            tensor_inputs = self._tensor_input(q_index=q_index, c_index=[childrens])
+            tensor_inputs = self._opt_tensor_input(q_index=q_index, c_index=[childrens])
             scores = self.meta_tcom.get_score(**tensor_inputs).squeeze()
             beamIdx = t.argsort(scores, descending=True)[:beam]
             queue = childrens[beamIdx]
 
 
         # sort final candidate (leaf nodes)
-        tensor_inputs = self._tensor_input(q_index=q_index, c_index=[candidate])
+        tensor_inputs = self._opt_tensor_input(q_index=q_index, c_index=[candidate])
         scores = self.meta_tcom.get_score(**tensor_inputs).squeeze()
         sortIdx = t.argsort(scores, descending=True)
         beam_leaf = candidate[sortIdx]
@@ -499,3 +505,32 @@ class LEFT(Module):
             regrets.append(regret)
 
         return beam_search_loss, rank_loss, regrets[-1]
+
+
+    def _opt_tensor_input(self, q_index:list, c_index:list):
+
+        # Size: q_index: (Batch, 1), c_index: (Batch, Num Nodes)
+        # Match Candidates Inputs
+
+        # Setup QIndex Cache
+        for i, qindex in enumerate(q_index):
+            qindex_int = qindex.item()
+            if qindex_int not in self.cache[f"QIndex{i}"]:
+                embeds = self.meta_tcom.get_embeddings(qindex, select=self.args.qtype[i])
+                self.cache[f"QIndex{i}"][qindex_int] = embeds.unsqueeze(0).repeat(400 * self.tree.narys, 1)
+            
+        # Create Query Input
+        inputs = {}
+
+        # Query Embeddings: Generated from MetaTC
+        num_nodes = c_index[0].shape[-1]
+        for i, type in enumerate(self.args.qtype):
+            embeds = self.cache[f"QIndex{i}"][q_index[i].item()][:num_nodes]
+            inputs[f'{type}_embeds'] = embeds
+
+        # Candidate Embeddings: Generated from Tree Embeddings
+        tree_embeds = self.tree_embs.forward(c_index[0])
+        for i, type in enumerate(self.args.ktype):
+            inputs[f'{type}_embeds'] = tree_embeds[i]
+
+        return inputs

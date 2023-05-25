@@ -1,7 +1,6 @@
 import argparse
 import time
 import json
-
 import einops
 import torch as t
 from loguru import logger
@@ -90,7 +89,6 @@ def RankPerf(model, dataModule, args, runId):
 
 @t.no_grad()
 def BruteForcePerf(model, dataModule, args, runId):
-    qtype = args.qtype
 
     fullTensor = dataModule.fullset.tensor
 
@@ -259,7 +257,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='LTP')
 
     # LEFT
-    parser.add_argument('--narys', type=int, default=2)
+    parser.add_argument('--narys', type=int, default=3)
     parser.add_argument('--beam', type=int, default=25)
     parser.add_argument('--qtype', type=list, default=['user', 'item'])
     parser.add_argument('--ktype', type=list, default=['time'])
@@ -274,7 +272,7 @@ if __name__ == '__main__':
     # Training
     parser.add_argument('--bs', type=int, default=256)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--patience', type=int, default=5)
     parser.add_argument('--device', type=str, default='cpu')
 

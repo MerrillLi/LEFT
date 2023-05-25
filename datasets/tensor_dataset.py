@@ -57,9 +57,9 @@ class DataModule:
         self.fullset = fullset
 
         self.trainloader = DataLoader(trainset, batch_size=args.bs, shuffle=True)
-        self.validloader = DataLoader(validset, batch_size=args.bs * 2, shuffle=False)
-        self.testloader = DataLoader(testset, batch_size=args.bs * 2, shuffle=False)
-        self.fullloader = DataLoader(fullset, batch_size=args.bs, shuffle=False)
+        self.validloader = DataLoader(validset, batch_size=args.bs * 8, shuffle=False)
+        self.testloader = DataLoader(testset, batch_size=args.bs * 8, shuffle=False)
+        self.fullloader = DataLoader(fullset, batch_size=args.bs * 8, shuffle=False)
 
     def trainLoader(self):
         return self.trainloader
