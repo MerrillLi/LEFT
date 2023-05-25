@@ -79,12 +79,12 @@ def RankPerf(model, dataModule, args, runId):
     
     top20_ms, top50_ms, top100_ms = perfTimer20.compute(), perfTimer50.compute(), perfTimer100.compute()
 
-    logger.info("***" * 22)
+    logger.info("***" * 15)
     logger.info(f"Round={runId} Tree Indexer Retrieval Performance")
     logger.info(f"Round={runId} Top  20  R={top20_recall:.4f} P={top20_precision:.4f} F={top20_fmeasure:.4f} T={top20_ms:.1f}ms")
     logger.info(f"Round={runId} Top  50  R={top50_recall:.4f} P={top50_precision:.4f} F={top50_fmeasure:.4f} T={top50_ms:.1f}ms")
     logger.info(f"Round={runId} Top 100  R={top100_recall:.4f} P={top100_precision:.4f} F={top100_fmeasure:.4f} T={top100_ms:.1f}ms")
-    logger.info("***" * 22)
+    logger.info("***" * 15)
 
 
 @t.no_grad()
@@ -136,12 +136,12 @@ def BruteForcePerf(model, dataModule, args, runId):
     top20_ms, top50_ms, top100_ms = perfTimer20.compute(), perfTimer50.compute(), perfTimer100.compute()
     common_time = commonTimer.compute() / num_queries
 
-    logger.info("***" * 22)
+    logger.info("***" * 15)
     logger.info(f"Round={runId} Brute Force Retrieval Performance")
     logger.info(f"Round={runId} Top  20  R={top20_recall:.4f} P={top20_precision:.4f} F={top20_fmeasure:.4f} T={top20_ms+common_time:.1f}ms")
     logger.info(f"Round={runId} Top  50  R={top50_recall:.4f} P={top50_precision:.4f} F={top50_fmeasure:.4f} T={top50_ms+common_time:.1f}ms")
     logger.info(f"Round={runId} Top 100  R={top100_recall:.4f} P={top100_precision:.4f} F={top100_fmeasure:.4f} T={top100_ms+common_time:.1f}ms")
-    logger.info("***" * 22)
+    logger.info("***" * 15)
 
 
 def RunOnce(args, runId, runHash):
