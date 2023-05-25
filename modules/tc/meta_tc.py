@@ -10,10 +10,6 @@ def to_device(args, device):
     return [arg.to(device) for arg in args]
 
 
-
-
-
-
 class MetaTC(Module, ABC):
 
     def __init__(self, args):

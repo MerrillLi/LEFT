@@ -24,4 +24,4 @@ class PerfTimer:
         self.elapsed.append(self.end_times[-1] - self.start_times[-1])
     
     def compute(self):
-        return sum(self.elapsed) * 1000
+        return sum(self.elapsed) * 1000 / len(self.elapsed)

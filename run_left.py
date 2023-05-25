@@ -11,8 +11,9 @@ from lightning import seed_everything
 from utils.logger import setup_logger
 from modules.LEFT import LEFT
 from utils.metrics import RankMetrics
+from utils.timer import PerfTimer
 
-
+@t.no_grad()
 def RankPerf(model, dataModule, args, runId):
     qtype = args.qtype
 
@@ -20,48 +21,112 @@ def RankPerf(model, dataModule, args, runId):
     top50_metrics = RankMetrics(dataModule.fullset.tensor, topk=50, args=args)
     top100_metrics = RankMetrics(dataModule.fullset.tensor, topk=100, args=args)
 
-    cnt = 0
-    for i in range(eval(f'args.num_{qtype[0]}s')):
-        for j in range(eval(f'args.num_{qtype[1]}s')):
-            q_index = [t.tensor(i), t.tensor(j)]
-            top20beam = model.beam_search(q_index, beam=100)[:20]
-            top50beam = model.beam_search(q_index, beam=200)[:50]
-            top100beam = model.beam_search(q_index, beam=400)[:100]
+    perfTimer20 = PerfTimer()
+    perfTimer50 = PerfTimer()
+    perfTimer100 = PerfTimer()
 
-            top20_metrics.append(cnt, top20beam)
-            top50_metrics.append(cnt, top50beam)
-            top100_metrics.append(cnt, top100beam)
+    if len(args.qtype) == 1:
+        
+        for i in range(eval(f'args.num_{qtype[0]}s')):
+            q_index = [t.tensor(i)]
 
-            cnt += 1
+            perfTimer20.start()
+            top20beam = model.beam_search(q_index, beam=50)[:20]
+            perfTimer20.end()
+
+            perfTimer50.start()
+            top50beam = model.beam_search(q_index, beam=100)[:50]
+            perfTimer50.end()
+
+            perfTimer100.start()
+            top100beam = model.beam_search(q_index, beam=200)[:100]
+            perfTimer100.end()
+
+            top20_metrics.append(i, top20beam)
+            top50_metrics.append(i, top50beam)
+            top100_metrics.append(i, top100beam)
+
+    elif len(args.qtype) == 2:   
+        num_type0 = eval(f'args.num_{qtype[0]}s')
+        num_type1 = eval(f'args.num_{qtype[1]}s')
+
+        for i in range(num_type0):
+            for j in range(num_type1):
+                idx = i * num_type1 + j
+
+                q_index = [t.tensor(i), t.tensor(j)]
+
+                perfTimer20.start()
+                top20beam = model.beam_search(q_index, beam=100)[:20]
+                perfTimer20.end()
+
+                perfTimer50.start()
+                top50beam = model.beam_search(q_index, beam=200)[:50]
+                perfTimer50.end()
+                
+                perfTimer100.start()
+                top100beam = model.beam_search(q_index, beam=400)[:100]
+                perfTimer100.end()
+                
+                top20_metrics.append(idx, top20beam)
+                top50_metrics.append(idx, top50beam)
+                top100_metrics.append(idx, top100beam)
+
 
     top20_recall, top20_precision, top20_fmeasure = top20_metrics.compute()
     top50_recall, top50_precision, top50_fmeasure = top50_metrics.compute()
     top100_recall, top100_precision, top100_fmeasure = top100_metrics.compute()
 
+    
+    top20_ms, top50_ms, top100_ms = perfTimer20.compute(), perfTimer50.compute(), perfTimer100.compute()
+
     logger.info("***" * 22)
     logger.info(f"Round={runId} Tree Indexer Retrieval Performance")
-    logger.info(f"Round={runId} Top20  Recall={top20_recall:.4f} Precision={top20_precision:.4f} F-Measure={top20_fmeasure:.4f}")
-    logger.info(f"Round={runId} Top50  Recall={top50_recall:.4f} Precision={top50_precision:.4f} F-Measure={top50_fmeasure:.4f}")
-    logger.info(f"Round={runId} Top100 Recall={top100_recall:.4f} Precision={top100_precision:.4f} F-Measure={top100_fmeasure:.4f}")
+    logger.info(f"Round={runId} Top  20  R={top20_recall:.4f} P={top20_precision:.4f} F={top20_fmeasure:.4f} T={top20_ms:.1f}ms")
+    logger.info(f"Round={runId} Top  50  R={top50_recall:.4f} P={top50_precision:.4f} F={top50_fmeasure:.4f} T={top50_ms:.1f}ms")
+    logger.info(f"Round={runId} Top 100  R={top100_recall:.4f} P={top100_precision:.4f} F={top100_fmeasure:.4f} T={top100_ms:.1f}ms")
     logger.info("***" * 22)
 
 
+@t.no_grad()
 def BruteForcePerf(model, dataModule, args, runId):
     qtype = args.qtype
 
     fullTensor = dataModule.fullset.tensor
+
+    commonTimer = PerfTimer()
+
+    commonTimer.start()
     predTensor = model.meta_tcom.infer_full_tensor(dataModule.fullLoader())
+    commonTimer.end()
 
     predTensor = einops.rearrange(predTensor, 'time user item -> (user item) (time)')
 
     top20_metrics = RankMetrics(fullTensor, topk=20, args=args)
     top50_metrics = RankMetrics(fullTensor, topk=50, args=args)
     top100_metrics = RankMetrics(fullTensor, topk=100, args=args)
+    
+    perfTimer20 = PerfTimer()
+    perfTimer50 = PerfTimer()
+    perfTimer100 = PerfTimer()
 
-    for i in range(eval(f'args.num_{qtype[0]}s') * eval(f'args.num_{qtype[1]}s')):
+    num_queries = 1
+    for single_type in args.qtype:
+        num_queries *= eval(f'args.num_{single_type}s')
+
+    for i in range(num_queries):
+
+        perfTimer20.start()
         top20beam = t.argsort(predTensor[i], descending=True)[:20]
+        perfTimer20.end()
+
+        perfTimer50.start()
         top50beam = t.argsort(predTensor[i], descending=True)[:50]
+        perfTimer50.end()
+
+        perfTimer100.start()
         top100beam = t.argsort(predTensor[i], descending=True)[:100]
+        perfTimer100.end()
 
         top20_metrics.append(i, top20beam)
         top50_metrics.append(i, top50beam)
@@ -70,12 +135,14 @@ def BruteForcePerf(model, dataModule, args, runId):
     top20_recall, top20_precision, top20_fmeasure = top20_metrics.compute()
     top50_recall, top50_precision, top50_fmeasure = top50_metrics.compute()
     top100_recall, top100_precision, top100_fmeasure = top100_metrics.compute()
+    top20_ms, top50_ms, top100_ms = perfTimer20.compute(), perfTimer50.compute(), perfTimer100.compute()
+    common_time = commonTimer.compute() / num_queries
 
     logger.info("***" * 22)
     logger.info(f"Round={runId} Brute Force Retrieval Performance")
-    logger.info(f"Round={runId} Top20  Recall={top20_recall:.4f} Precision={top20_precision:.4f} F-Measure={top20_fmeasure:.4f}")
-    logger.info(f"Round={runId} Top50  Recall={top50_recall:.4f} Precision={top50_precision:.4f} F-Measure={top50_fmeasure:.4f}")
-    logger.info(f"Round={runId} Top100 Recall={top100_recall:.4f} Precision={top100_precision:.4f} F-Measure={top100_fmeasure:.4f}")
+    logger.info(f"Round={runId} Top  20  R={top20_recall:.4f} P={top20_precision:.4f} F={top20_fmeasure:.4f} T={top20_ms+common_time:.1f}ms")
+    logger.info(f"Round={runId} Top  50  R={top50_recall:.4f} P={top50_precision:.4f} F={top50_fmeasure:.4f} T={top50_ms+common_time:.1f}ms")
+    logger.info(f"Round={runId} Top 100  R={top100_recall:.4f} P={top100_precision:.4f} F={top100_fmeasure:.4f} T={top100_ms+common_time:.1f}ms")
     logger.info("***" * 22)
 
 

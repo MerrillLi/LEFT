@@ -103,7 +103,7 @@ class TreeNodeEmbeddings(Module):
         self.transform = ModuleDict()
         self.q_transform = ModuleDict()
         for i in range(chunks):
-            self.transform[str(i)] = Sequential(Linear(rank, 5 * rank), ReLU(), Linear(5 * rank, rank))
+            self.transform[str(i)] = Sequential(Linear(rank, 1 * rank), ReLU(), Linear(1 * rank, rank))
 
         for i in range(chunks):
             self.q_transform[str(i)] = Sequential(Linear((len(qtype) + 1) * rank, 10 * rank), ReLU(), Linear(10 * rank, rank))
