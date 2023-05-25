@@ -244,7 +244,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='NCP')
 
     # Index Params
-    parser.add_argument('--index', type=str, default='PQ')
+    parser.add_argument('--index', type=str, default='HNSW')
     parser.add_argument('--qtype', type=list, default=['user', 'item'])
     parser.add_argument('--ktype', type=list, default=['time'])
 
@@ -252,7 +252,7 @@ if __name__ == '__main__':
     parser.add_argument('--LSHbits', type=int, default=32)
 
     # Specify for HNSW
-    parser.add_argument('--HNSWx', type=int, default=8)
+    parser.add_argument('--HNSWx', type=int, default=0)
 
     # Specify for PQ
     parser.add_argument('--PQm', type=int, default=5)
