@@ -13,6 +13,7 @@ from modules.tc import get_model
 from modules.tc.meta_tc import MetaTC
 from utils.metrics import RankMetrics
 from modules.faiss_indexer import FaissIndexer
+from utils.timer import PerfTimer
 
 
 @t.no_grad()
@@ -27,6 +28,11 @@ def FaissRankPerf(model: MetaTC, dataModule, args, runId):
     indexer.train_indexer(model)
 
     # 2. 查詢結果並判斷結果的準確性
+
+    perfTimer20 = PerfTimer()
+    perfTimer50 = PerfTimer()
+    perfTimer100 = PerfTimer()
+
     if len(args.qtype) == 1:
         qtype = args.qtype[0]
         num_type = eval(f'args.num_{qtype}s')
@@ -35,9 +41,17 @@ def FaissRankPerf(model: MetaTC, dataModule, args, runId):
 
         for i in range(num_type):
             query = query_embeds[i]
+            perfTimer20.start()
             top20_beam = indexer.find_topk_by_query(query, topk=20)
+            perfTimer20.end()
+
+            perfTimer50.start()
             top50_beam = indexer.find_topk_by_query(query, topk=50)
+            perfTimer50.end()    
+
+            perfTimer100.start()
             top100_beam = indexer.find_topk_by_query(query, topk=100)
+            perfTimer100.end()
 
             top20_metrics.append(i, top20_beam)
             top50_metrics.append(i, top50_beam)
@@ -60,9 +74,18 @@ def FaissRankPerf(model: MetaTC, dataModule, args, runId):
             for j in range(num_type2):
                 idx = i * num_type2 + j
                 query = query1_embeds[i] * query2_embeds[j]
+
+                perfTimer20.start()
                 top20_beam = indexer.find_topk_by_query(query, topk=20)
+                perfTimer20.end()
+
+                perfTimer50.start()
                 top50_beam = indexer.find_topk_by_query(query, topk=50)
+                perfTimer50.end()
+
+                perfTimer100.start()
                 top100_beam = indexer.find_topk_by_query(query, topk=100)
+                perfTimer100.end()
 
                 top20_metrics.append(idx, top20_beam)
                 top50_metrics.append(idx, top50_beam)
@@ -72,11 +95,13 @@ def FaissRankPerf(model: MetaTC, dataModule, args, runId):
     top50_recall, top50_precision, top50_fmeasure = top50_metrics.compute()
     top100_recall, top100_precision, top100_fmeasure = top100_metrics.compute()
 
+    top20_ms, top50_ms, top100_ms = perfTimer20.compute(), perfTimer50.compute(), perfTimer100.compute()
+
     logger.info("***" * 22)
     logger.info(f"Round={runId} {args.index} Indexer Retrieval Performance")
-    logger.info(f"Round={runId} Top20  Recall={top20_recall:.4f} Precision={top20_precision:.4f} F-Measure={top20_fmeasure:.4f}")
-    logger.info(f"Round={runId} Top50  Recall={top50_recall:.4f} Precision={top50_precision:.4f} F-Measure={top50_fmeasure:.4f}")
-    logger.info(f"Round={runId} Top100 Recall={top100_recall:.4f} Precision={top100_precision:.4f} F-Measure={top100_fmeasure:.4f}")
+    logger.info(f"Round={runId} Top  20  R={top20_recall:.4f} P={top20_precision:.4f} F={top20_fmeasure:.4f} T={top20_ms:.1f}ms")
+    logger.info(f"Round={runId} Top  50  R={top50_recall:.4f} P={top50_precision:.4f} F={top50_fmeasure:.4f} T={top50_ms:.1f}ms")
+    logger.info(f"Round={runId} Top 100  R={top100_recall:.4f} P={top100_precision:.4f} F={top100_fmeasure:.4f} T={top100_ms:.1f}ms")
     logger.info("***" * 22)
 
 
@@ -85,7 +110,12 @@ def BruteForcePerf(model, dataModule, args, runId):
     qtype = args.qtype
 
     fullTensor = dataModule.fullset.tensor
+
+
+    commonTimer = PerfTimer()
+    commonTimer.start()
     predTensor = model.infer_full_tensor(dataModule.fullLoader())
+    commonTimer.end()
 
     predTensor = einops.rearrange(predTensor, 'time user item -> (user item) (time)')
 
@@ -93,10 +123,27 @@ def BruteForcePerf(model, dataModule, args, runId):
     top50_metrics = RankMetrics(fullTensor, topk=50, args=args)
     top100_metrics = RankMetrics(fullTensor, topk=100, args=args)
 
-    for i in range(eval(f'args.num_{qtype[0]}s') * eval(f'args.num_{qtype[1]}s')):
+    top20_timer = PerfTimer()
+    top50_timer = PerfTimer()
+    top100_timer = PerfTimer()
+
+    num_queries = 1
+    for single_type in args.qtype:
+        num_queries *= eval(f'args.num_{single_type}s')
+
+    for i in range(num_queries):
+
+        top20_timer.start()
         top20beam = t.argsort(predTensor[i], descending=True)[:20]
+        top20_timer.end()
+
+        top50_timer.start()
         top50beam = t.argsort(predTensor[i], descending=True)[:50]
+        top50_timer.end()
+
+        top100_timer.start()
         top100beam = t.argsort(predTensor[i], descending=True)[:100]
+        top100_timer.end()
 
         top20_metrics.append(i, top20beam)
         top50_metrics.append(i, top50beam)
@@ -106,11 +153,14 @@ def BruteForcePerf(model, dataModule, args, runId):
     top50_recall, top50_precision, top50_fmeasure = top50_metrics.compute()
     top100_recall, top100_precision, top100_fmeasure = top100_metrics.compute()
 
+    top20_ms, top50_ms, top100_ms = top20_timer.compute(), top50_timer.compute(), top100_timer.compute()
+    common_ms = commonTimer.compute() / num_queries
+
     logger.info("***" * 22)
     logger.info(f"Round={runId} Brute Force Retrieval Performance")
-    logger.info(f"Round={runId} Top20  Recall={top20_recall:.4f} Precision={top20_precision:.4f} F-Measure={top20_fmeasure:.4f}")
-    logger.info(f"Round={runId} Top50  Recall={top50_recall:.4f} Precision={top50_precision:.4f} F-Measure={top50_fmeasure:.4f}")
-    logger.info(f"Round={runId} Top100 Recall={top100_recall:.4f} Precision={top100_precision:.4f} F-Measure={top100_fmeasure:.4f}")
+    logger.info(f"Round={runId} Top  20  R={top20_recall:.4f} P={top20_precision:.4f} F={top20_fmeasure:.4f} T={common_ms+top20_ms:.1f}ms")
+    logger.info(f"Round={runId} Top  50  R={top50_recall:.4f} P={top50_precision:.4f} F={top50_fmeasure:.4f} T={common_ms+top50_ms:.1f}ms")
+    logger.info(f"Round={runId} Top 100  R={top100_recall:.4f} P={top100_precision:.4f} F={top100_fmeasure:.4f} T={common_ms+top100_ms:.1f}ms")
     logger.info("***" * 22)
 
 
