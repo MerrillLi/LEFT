@@ -12,7 +12,7 @@ from utils.logger import setup_logger
 from modules.tc import get_model
 from modules.tc.meta_tc import MetaTC
 from utils.metrics import RankMetrics
-from modules.faiss_indexer import FaissIndexer
+from modules.indexer.faiss_indexer import FaissIndexer
 from utils.timer import PerfTimer
 
 

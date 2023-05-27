@@ -11,6 +11,8 @@ from utils.logger import setup_logger
 from modules.LEFT import LEFT
 from utils.metrics import RankMetrics
 from utils.timer import PerfTimer
+from utils.reshape import get_reshape_string
+
 
 @t.no_grad()
 def RankPerf(model, dataModule, args, runId):
@@ -98,7 +100,7 @@ def BruteForcePerf(model, dataModule, args, runId):
     predTensor = model.meta_tcom.infer_full_tensor(dataModule.fullLoader())
     commonTimer.end()
 
-    predTensor = einops.rearrange(predTensor, 'time user item -> (user item) (time)')
+    predTensor = einops.rearrange(predTensor, f'time user item -> {get_reshape_string(args.qtype, args.ktype)}')
 
     top20_metrics = RankMetrics(fullTensor, topk=20, args=args)
     top50_metrics = RankMetrics(fullTensor, topk=50, args=args)
@@ -199,21 +201,18 @@ def RunOnce(args, runId, runHash):
         model.tree_opt.zero_grad()
         q_index = [t.randint(low=0, high=eval(f"args.num_{qtype}s"), size=(12, )) for qtype in args.qtype]
 
-
         # 上溯逐层学习, 使用Curriculum控制学习的层次大小
-        sbs_loss = model.stochastic_beam_search_loss(q_index, beam=args.beam, curriculum=i // 60)
-        pbs_loss, rank_loss, regret = model.beam_search_regret_loss(q_index, topk=args.beam // 2, beam=args.beam // 2)
-
+        sbs_loss = model.stochastic_beam_search_loss(q_index, beam=args.beam, curriculum=i // 200)
         loss = sbs_loss
         loss.backward()
 
         # gradient clipping
-        t.nn.utils.clip_grad_norm_(model.tree_embs.parameters(), 2.0)
+        t.nn.utils.clip_grad_norm_(model.tree_embs.parameters(), 5.0)
         model.tree_opt.step()
-        # model.opt_scheduler.step()
+        model.opt_scheduler.step()
 
         if i % 20 == 0:
-            print(f"Round={runId} Iter={i} sbs_loss={sbs_loss:.4f} pbs_loss={pbs_loss:.4f} rank_loss={rank_loss:.4f}, Regret={regret:.4f}")
+            print(f"Round={runId} Iter={i} sbs_loss={sbs_loss:.4f}")
 
 
     return tNRMSE, tNMAE
@@ -257,10 +256,12 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='LTP')
 
     # LEFT
-    parser.add_argument('--narys', type=int, default=3)
-    parser.add_argument('--beam', type=int, default=25)
-    parser.add_argument('--qtype', type=list, default=['user', 'item'])
-    parser.add_argument('--ktype', type=list, default=['time'])
+    parser.add_argument('--narys', type=int, default=4)
+    parser.add_argument('--beam', type=int, default=50)
+    # parser.add_argument('--qtype', type=list, default=['user', 'item'])
+    # parser.add_argument('--ktype', type=list, default=['time'])
+    parser.add_argument('--qtype', type=list, default=['user'])
+    parser.add_argument('--ktype', type=list, default=['item', 'time'])
 
     # Dataset
     parser.add_argument('--density', type=float, default=0.1)
@@ -272,7 +273,7 @@ if __name__ == '__main__':
     # Training
     parser.add_argument('--bs', type=int, default=256)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--epochs', type=int, default=30)
+    parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--patience', type=int, default=5)
     parser.add_argument('--device', type=str, default='cpu')
 
@@ -286,3 +287,4 @@ if __name__ == '__main__':
 
     # Run Experiments
     RunExperiments(args=args)
+

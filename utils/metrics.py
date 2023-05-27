@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from einops import rearrange
+from utils.reshape import get_reshape_string
 
 class ErrorMetrics:
 
@@ -38,9 +39,8 @@ class RankMetrics:
         self.args = args
 
         # rearrange fullTensor [Time, User, Item] by QType and KType
-        qtype = self._list_to_string(self.args.qtype)
-        ktype = self._list_to_string(self.args.ktype)
-        self.fullTensor = rearrange(self.fullTensor, f'time user item -> ({qtype}) ({ktype})')
+        tgt_fmt = get_reshape_string(self.args.qtype, self.args.ktype)
+        self.fullTensor = rearrange(self.fullTensor, f'time user item -> {tgt_fmt}')
 
         self.recalls = []
         self.precisions = []
