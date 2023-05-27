@@ -27,7 +27,7 @@ def RankPerf(model, dataModule, args, runId):
     perfTimer100 = PerfTimer()
 
     if len(args.qtype) == 1:
-        
+
         for i in range(eval(f'args.num_{qtype[0]}s')):
             q_index = [t.tensor(i)]
 
@@ -47,7 +47,7 @@ def RankPerf(model, dataModule, args, runId):
             top50_metrics.append(i, top50beam)
             top100_metrics.append(i, top100beam)
 
-    elif len(args.qtype) == 2:   
+    elif len(args.qtype) == 2:
         num_type0 = eval(f'args.num_{qtype[0]}s')
         num_type1 = eval(f'args.num_{qtype[1]}s')
 
@@ -58,17 +58,17 @@ def RankPerf(model, dataModule, args, runId):
                 q_index = [t.tensor(i), t.tensor(j)]
 
                 perfTimer20.start()
-                top20beam = model.beam_search(q_index, beam=100)[:20]
+                top20beam = model.beam_search(q_index, beam=50)[:20]
                 perfTimer20.end()
 
                 perfTimer50.start()
-                top50beam = model.beam_search(q_index, beam=200)[:50]
+                top50beam = model.beam_search(q_index, beam=100)[:50]
                 perfTimer50.end()
-                
+
                 perfTimer100.start()
-                top100beam = model.beam_search(q_index, beam=400)[:100]
+                top100beam = model.beam_search(q_index, beam=200)[:100]
                 perfTimer100.end()
-                
+
                 top20_metrics.append(idx, top20beam)
                 top50_metrics.append(idx, top50beam)
                 top100_metrics.append(idx, top100beam)
@@ -78,7 +78,7 @@ def RankPerf(model, dataModule, args, runId):
     top50_recall, top50_precision, top50_fmeasure = top50_metrics.compute()
     top100_recall, top100_precision, top100_fmeasure = top100_metrics.compute()
 
-    
+
     top20_ms, top50_ms, top100_ms = perfTimer20.compute(), perfTimer50.compute(), perfTimer100.compute()
 
     logger.info("***" * 15)
@@ -105,7 +105,7 @@ def BruteForcePerf(model, dataModule, args, runId):
     top20_metrics = RankMetrics(fullTensor, topk=20, args=args)
     top50_metrics = RankMetrics(fullTensor, topk=50, args=args)
     top100_metrics = RankMetrics(fullTensor, topk=100, args=args)
-    
+
     perfTimer20 = PerfTimer()
     perfTimer50 = PerfTimer()
     perfTimer100 = PerfTimer()
@@ -202,12 +202,12 @@ def RunOnce(args, runId, runHash):
         q_index = [t.randint(low=0, high=eval(f"args.num_{qtype}s"), size=(12, )) for qtype in args.qtype]
 
         # 上溯逐层学习, 使用Curriculum控制学习的层次大小
-        sbs_loss = model.stochastic_beam_search_loss(q_index, beam=args.beam, curriculum=i // 200)
+        sbs_loss = model.stochastic_beam_search_loss(q_index, beam=args.beam, curriculum=i // 60)
         loss = sbs_loss
         loss.backward()
 
         # gradient clipping
-        t.nn.utils.clip_grad_norm_(model.tree_embs.parameters(), 5.0)
+        t.nn.utils.clip_grad_norm_(model.tree_embs.parameters(), 2.0)
         model.tree_opt.step()
         model.opt_scheduler.step()
 
@@ -258,10 +258,10 @@ if __name__ == '__main__':
     # LEFT
     parser.add_argument('--narys', type=int, default=4)
     parser.add_argument('--beam', type=int, default=50)
-    # parser.add_argument('--qtype', type=list, default=['user', 'item'])
-    # parser.add_argument('--ktype', type=list, default=['time'])
-    parser.add_argument('--qtype', type=list, default=['user'])
-    parser.add_argument('--ktype', type=list, default=['item', 'time'])
+    parser.add_argument('--qtype', type=list, default=['user', 'item'])
+    parser.add_argument('--ktype', type=list, default=['time'])
+    # parser.add_argument('--qtype', type=list, default=['user'])
+    # parser.add_argument('--ktype', type=list, default=['item', 'time'])
 
     # Dataset
     parser.add_argument('--density', type=float, default=0.1)

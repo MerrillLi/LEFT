@@ -86,5 +86,12 @@ if __name__ == '__main__':
 
     index = StructIndexTree(args)
 
+
+
     print(index.node_mask)
     print(index.leaf_mapp[index.leaf_mask == 1])
+
+
+
+    # 从叶子节点开始
+
