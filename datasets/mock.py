@@ -27,4 +27,9 @@ def mock_data(size, rank):
     return tensor
 
 if __name__ == '__main__':
-    mock_data((128, 32, 32), 20)
+    dataset = np.load('seattle.npy')
+    print(dataset.shape)
+    import einops
+
+    # dataset = einops.rearrange(dataset, 'u i t -> t u i')
+    # np.save('seattle.npy', dataset)

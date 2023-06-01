@@ -23,7 +23,9 @@ class TreeNodeEmbeddings(Module):
         self.transform = ModuleDict()
         self.q_transform = ModuleDict()
         for i in range(self.chunks):
-            self.transform[str(i)] = Sequential(Linear(self.rank, 1 * self.rank), ReLU(), Linear(1 * self.rank, self.rank))
+            # self.transform[str(i)] = Sequential(Linear(self.rank, 1 * self.rank), ReLU(), Linear(1 * self.rank, self.rank), ReLU(), Linear(1 * self.rank, self.rank))
+            # self.transform[str(i)] = Sequential(Identity())
+            self.transform[str(i)] = Sequential(Linear(self.rank, self.rank), Dropout(0.5), Linear(self.rank, self.rank))
 
         for i in range(self.chunks):
             self.q_transform[str(i)] = Sequential(Linear((len(self.qtype) + 1) * self.rank, 10 * self.rank), ReLU(), Linear(10 * self.rank, self.rank))
@@ -31,9 +33,14 @@ class TreeNodeEmbeddings(Module):
         # The Index Tree
         self.tree = tree
 
+        # Move to device
+        self.to(self.args.device)
+
         # Allow Inplace Operation
         leafIdx = self.tree.leaf_mask == 1
         self.tree_node_embeddings.weight.data[leafIdx].requires_grad = False
+
+
 
 
     def forward(self, nodeIdx, query:dict=None):
@@ -110,17 +117,22 @@ class LEFT(Module):
 
     def setup_optimizer(self):
         self.meta_tcom.setup_optimizer()
-        self.tree_opt = t.optim.RMSprop(self.tree_embs.parameters(), lr=0.006)
-        self.opt_scheduler = t.optim.lr_scheduler.ConstantLR(self.tree_opt)
-        # self.opt_scheduler = t.optim.lr_scheduler.StepLR(self.tree_opt, step_size=150, gamma=0.8)
+
+        param_group = [
+            {'params': self.tree_embs.tree_node_embeddings.parameters(), 'lr': 0.01},
+            {'params': self.tree_embs.transform.parameters(), 'lr': 0.001}
+        ]
+        self.tree_opt = t.optim.Adam(param_group)
+        # self.opt_scheduler = t.optim.lr_scheduler.ConstantLR(self.tree_opt)
+        self.opt_scheduler = t.optim.lr_scheduler.StepLR(self.tree_opt, step_size=self.args.curr, gamma=0.9)
 
 
-    def _tensor_input(self, q_index:list, c_index:list):
+    def _tensor_input(self, q_index:list, c_index):
 
         # Size: q_index: (Batch, 1), c_index: (Batch, Num Nodes)
         # Match Candidates Inputs
 
-        num_nodes = c_index[0].shape[-1]
+        num_nodes = c_index.shape[-1]
 
         q_index = [ index.view(-1, 1).repeat(1, num_nodes) for index in q_index ]
 
@@ -129,11 +141,11 @@ class LEFT(Module):
 
         # Query Embeddings: Generated from MetaTC
         for i, type in enumerate(self.args.qtype):
-            embeds = self.meta_tcom.get_embeddings(q_index[i], select=type)
+            embeds = self.meta_tcom.get_embeddings(q_index[i].to(self.device), select=type)
             inputs[f'{type}_embeds'] = embeds
 
         # Candidate Embeddings: Generated from Tree Embeddings
-        tree_embeds = self.tree_embs.forward(c_index[0])
+        tree_embeds = self.tree_embs.forward(c_index.to(self.device))
         for i, type in enumerate(self.args.ktype):
             inputs[f'{type}_embeds'] = tree_embeds[i]
 
@@ -196,18 +208,24 @@ class LEFT(Module):
             self.tree_embs.tree_node_embeddings.weight.data[i] = \
                 self.tree_embs.tree_node_embeddings.weight.data[self.tree.narys * i + 1: self.tree.narys * i + 1 + valid_leaf_num].mean(dim=0)
 
+        self.tree_embs.tree_node_embeddings.requires_grad_()
+
 
     @t.no_grad()
-    def beam_search(self, q_index, beam):
+    def beam_search(self, q_index, beam, return_scores=False):
 
         # Candidate Sets
         candidate = t.tensor([], dtype=t.int64, device=self.device)
 
         # Add Root Node
-        queue = t.tensor([0])
+        queue = t.tensor([0]).to(self.device)
+
+        # Layer-Skipping Optimization
         while len(queue) < beam:
 
             new_queue = self.tree.get_children(queue)
+            validIdx = self.tree.node_mask[new_queue] == 1
+            new_queue = new_queue[validIdx]
             if len(new_queue) > beam:
                 queue = new_queue
                 break
@@ -232,14 +250,14 @@ class LEFT(Module):
             # search childrens and sort
             childrens = self.tree.get_children(treeNode)
 
-            tensor_inputs = self._opt_tensor_input(q_index=q_index, c_index=[childrens])
+            tensor_inputs = self._opt_tensor_input(q_index=q_index, c_index=childrens)
             scores = self.meta_tcom.get_score(**tensor_inputs).squeeze()
             beamIdx = t.argsort(scores, descending=True)[:beam]
             queue = childrens[beamIdx]
 
 
         # sort final candidate (leaf nodes)
-        tensor_inputs = self._opt_tensor_input(q_index=q_index, c_index=[candidate])
+        tensor_inputs = self._opt_tensor_input(q_index=q_index, c_index=candidate)
         scores = self.meta_tcom.get_score(**tensor_inputs).squeeze()
         sortIdx = t.argsort(scores, descending=True)
         beam_leaf = candidate[sortIdx]
@@ -247,6 +265,10 @@ class LEFT(Module):
 
         # convert to leaf index
         candidateIdx = self.tree.leaf2ravel(beam_leaf)
+
+        if return_scores:
+            return candidateIdx, scores[sortIdx]
+
         return candidateIdx
 
 
@@ -271,7 +293,7 @@ class LEFT(Module):
 
             children = self.tree.get_children(nodeIdx)
 
-            tensor_inputs = self._tensor_input(q_index=q_index, c_index=[children])
+            tensor_inputs = self._tensor_input(q_index=q_index, c_index=children)
             origin_scores = self.meta_tcom.get_score(**tensor_inputs).detach()
 
             # Fix: 2023/05/06 - 未将无效的Children的Score设置为0
@@ -279,7 +301,7 @@ class LEFT(Module):
             origin_scores = t.reshape(origin_scores, (len(nodeIdx), self.tree.narys, -1))
             label_scores = t.max(origin_scores, dim=1)[0]
 
-            tensor_inputs = self._tensor_input(q_index=q_index, c_index=[nodeIdx])
+            tensor_inputs = self._tensor_input(q_index=q_index, c_index=nodeIdx)
             pred_scores = self.meta_tcom.get_score(**tensor_inputs)
 
             # Maskout the Node which is not valid in tree (to handle non full tree)
@@ -304,7 +326,7 @@ class LEFT(Module):
         return beam_search_loss
 
 
-    def _opt_tensor_input(self, q_index:list, c_index:list):
+    def _opt_tensor_input(self, q_index:list, c_index):
 
         # Size: q_index: (Batch, 1), c_index: (Batch, Num Nodes)
         # Match Candidates Inputs
@@ -313,20 +335,20 @@ class LEFT(Module):
         for i, qindex in enumerate(q_index):
             qindex_int = qindex.item()
             if qindex_int not in self.cache[f"QIndex{i}"]:
-                embeds = self.meta_tcom.get_embeddings(qindex, select=self.args.qtype[i])
+                embeds = self.meta_tcom.get_embeddings(qindex.to(self.device), select=self.args.qtype[i])
                 self.cache[f"QIndex{i}"][qindex_int] = embeds.unsqueeze(0).repeat(400 * self.tree.narys, 1)
 
         # Create Query Input
         inputs = {}
 
         # Query Embeddings: Generated from MetaTC
-        num_nodes = c_index[0].shape[-1]
+        num_nodes = c_index.shape[-1]
         for i, type in enumerate(self.args.qtype):
             embeds = self.cache[f"QIndex{i}"][q_index[i].item()][:num_nodes]
             inputs[f'{type}_embeds'] = embeds
 
         # Candidate Embeddings: Generated from Tree Embeddings
-        tree_embeds = self.tree_embs.forward(c_index[0])
+        tree_embeds = self.tree_embs.forward(c_index.to(self.device))
         for i, type in enumerate(self.args.ktype):
             inputs[f'{type}_embeds'] = tree_embeds[i]
 

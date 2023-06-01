@@ -11,7 +11,7 @@ def get_datasets(args):
 
     # get tensor
     data = get_tensor(args.dataset)[:args.num_times]
-    trunc = np.percentile(data, q=99.5)
+    trunc = np.percentile(data, q=99.9)
     data[data > trunc] = trunc
     data /= trunc
 

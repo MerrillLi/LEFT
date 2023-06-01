@@ -61,6 +61,10 @@ class SequentialIndexTree(TreeIndexer):
                 valid_flag |= self.node_mask[args.narys * i + (j + 1)]
             self.node_mask[i] = valid_flag
 
+        # 5. 移动到目标设备
+        self.leaf_mask = self.leaf_mask.to(self.args.device)
+        self.node_mask = self.node_mask.to(self.args.device)
+        self.leaf_mapp = self.leaf_mapp.to(self.args.device)
 
 
 # 测试代码
