@@ -14,8 +14,10 @@ from utils.metrics import RankMetrics, TopKRegret
 from utils.timer import PerfTimer
 from utils.reshape import get_reshape_string
 
+
 @t.no_grad()
 def RegretPerf(model, args):
+    model.eval()
     qtype = args.qtype
 
     regrets = []
@@ -55,6 +57,7 @@ def RegretPerf(model, args):
 
 @t.no_grad()
 def RankPerf(model, dataModule, args, runId):
+    model.eval()
     qtype = args.qtype
 
     top20_metrics = RankMetrics(dataModule.fullset.tensor, topk=20, args=args)
@@ -130,7 +133,7 @@ def RankPerf(model, dataModule, args, runId):
 
 @t.no_grad()
 def BruteForcePerf(model, dataModule, args, runId):
-
+    model.eval()
     fullTensor = dataModule.fullset.tensor
 
     commonTimer = PerfTimer()
@@ -229,23 +232,26 @@ def RunOnce(args, runId, runHash):
     # Train Tree Indexer #
     ######################
 
-
+    # Prepare Leaf Embeddings
     model.prepare_leaf_embeddings()
 
+    # Prepare Early Stop Monitor
+    index_monitor = EarlyStopMonitor(args.patience)
+
+    # Train Indexer
     for i in range(5000):
+        model.train()
 
-        if i % 100 == 0:
-            RankPerf(model, dataModule, args, runId)
-
-        model.tree_opt.zero_grad()
+        # 创建输入
         q_index = [t.randint(low=0, high=eval(f"args.num_{qtype}s"), size=(16, )) for qtype in args.qtype]
 
         # 上溯逐层学习, 使用Curriculum控制学习的层次大小
         sbs_loss = model.stochastic_beam_search_loss(q_index, beam=args.beam, curriculum=i // args.curr)
         loss = sbs_loss
-        loss.backward()
 
-        # gradient clipping
+        # 梯度下降
+        model.tree_opt.zero_grad()
+        loss.backward()
         t.nn.utils.clip_grad_norm_(model.tree_embs.parameters(), 2.0)
         model.tree_opt.step()
         model.opt_scheduler.step()
@@ -253,6 +259,18 @@ def RunOnce(args, runId, runHash):
         if i % 20 == 0:
             regret = RegretPerf(model, args)
             print(f"Round={runId} Iter={i} sbs_loss={sbs_loss:.4f} regret={regret:.4f}")
+            # Early Stop
+            if i > 200:
+                index_monitor.track(i, model.tree_embs.state_dict(), regret)
+
+        if index_monitor.early_stop():
+            break
+
+        if i % 100 == 0:
+            RankPerf(model, dataModule, args, runId)
+
+    # Test Indexer
+    RankPerf(model, dataModule, args, runId)
 
 
     return tNRMSE, tNMAE
@@ -284,7 +302,7 @@ if __name__ == '__main__':
     # LEFT
     parser.add_argument('--narys', type=int, default=2)
     parser.add_argument('--beam', type=int, default=50)
-    parser.add_argument('--curr', type=int, default=80)
+    parser.add_argument('--curr', type=int, default=40)
     # parser.add_argument('--qtype', type=list, default=['user', 'item'])
     # parser.add_argument('--ktype', type=list, default=['time'])
     parser.add_argument('--qtype', type=list, default=['user'])
@@ -300,7 +318,7 @@ if __name__ == '__main__':
     # Training
     parser.add_argument('--bs', type=int, default=256)
     parser.add_argument('--lr', type=float, default=2e-3)
-    parser.add_argument('--epochs', type=int, default=1)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--patience', type=int, default=5)
     parser.add_argument('--device', type=str, default='cpu')
 

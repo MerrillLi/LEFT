@@ -3,12 +3,14 @@ import copy
 
 class EarlyStopMonitor:
 
-    def __init__(self, patient):
+    def __init__(self, patient, mode='min'):
         self.params = None
         self.patient = patient
         self.counter = 0
         self.val = 1e10
         self.epoch = -1
+        self.mode = mode
+
 
     def early_stop(self):
         return self.counter >= self.patient

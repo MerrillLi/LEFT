@@ -3,65 +3,7 @@ import torch as t
 from torch.nn import *
 from modules.tc import get_model, MetaTC
 from modules.indexer import SequentialIndexTree, StructIndexTree
-
-
-class TreeNodeEmbeddings(Module):
-
-    def __init__(self, args, tree):
-        super().__init__()
-
-        # Record Params
-        self.args = args
-        self.rank = self.args.rank
-        self.qtype = self.args.qtype
-        self.chunks = len(self.args.ktype)
-        self.tree = tree
-        self.num_nodes = self.tree.num_nodes
-
-        # Node Embedding Modules
-        self.tree_node_embeddings = Embedding(self.num_nodes, self.rank * self.chunks)
-        self.transform = ModuleDict()
-        self.q_transform = ModuleDict()
-        for i in range(self.chunks):
-            # self.transform[str(i)] = Sequential(Linear(self.rank, 1 * self.rank), ReLU(), Linear(1 * self.rank, self.rank), ReLU(), Linear(1 * self.rank, self.rank))
-            # self.transform[str(i)] = Sequential(Identity())
-            self.transform[str(i)] = Sequential(Linear(self.rank, self.rank), Dropout(0.5), Linear(self.rank, self.rank))
-
-        for i in range(self.chunks):
-            self.q_transform[str(i)] = Sequential(Linear((len(self.qtype) + 1) * self.rank, 10 * self.rank), ReLU(), Linear(10 * self.rank, self.rank))
-
-        # The Index Tree
-        self.tree = tree
-
-        # Move to device
-        self.to(self.args.device)
-
-        # Allow Inplace Operation
-        leafIdx = self.tree.leaf_mask == 1
-        self.tree_node_embeddings.weight.data[leafIdx].requires_grad = False
-
-
-
-
-    def forward(self, nodeIdx, query:dict=None):
-        embeds = self.tree_node_embeddings(nodeIdx)
-        embeds_list = list(embeds.chunk(self.chunks, dim=-1))
-
-        output_embeds_list = [ embed.clone() for embed in embeds_list ]
-        # Transform Only Non-Leaf Embeddings (Since Leaf Embeddings are Fixed)
-        for i in range(self.chunks):
-            if query is None:
-                nonLeafIdx = self.tree.leaf_mask[nodeIdx] == 0
-                output_embeds_list[i][nonLeafIdx] = self.transform[str(i)](embeds_list[i][nonLeafIdx])
-
-            else:
-                nonLeafIdx = self.tree.leaf_mask[nodeIdx] == 0
-                query_inputs = [ q.reshape(output_embeds_list[0].shape) for q in query.values() ]
-                transform_inputs = t.cat(query_inputs, dim=-1)
-                transform_inputs = t.cat([embeds_list[i][nonLeafIdx], transform_inputs[nonLeafIdx]], dim=-1)
-                output_embeds_list[i][nonLeafIdx] = self.q_transform[str(i)](transform_inputs)
-
-        return output_embeds_list
+from modules.embed import FullTreeEmbeddings, FactorizedTreeEmbeddings, HashEmbeddings
 
 
 
@@ -110,7 +52,7 @@ class LEFT(Module):
 
         # Init Neural Indexer Structure
         index_tree = StructIndexTree(self.args)
-        tree_embeds = TreeNodeEmbeddings(self.args, index_tree)
+        tree_embeds = FactorizedTreeEmbeddings(self.args, index_tree)
 
         return index_tree, tree_embeds
 
@@ -120,11 +62,14 @@ class LEFT(Module):
 
         param_group = [
             {'params': self.tree_embs.tree_node_embeddings.parameters(), 'lr': 0.01},
-            {'params': self.tree_embs.transform.parameters(), 'lr': 0.001}
+            {'params': self.tree_embs.transform.parameters(), 'lr': 0.01}
         ]
-        self.tree_opt = t.optim.Adam(param_group)
-        # self.opt_scheduler = t.optim.lr_scheduler.ConstantLR(self.tree_opt)
-        self.opt_scheduler = t.optim.lr_scheduler.StepLR(self.tree_opt, step_size=self.args.curr, gamma=0.9)
+        # self.tree_opt = t.optim.Adam(param_group)
+
+        self.tree_opt = t.optim.Adam(self.tree_embs.parameters(), lr=0.001)
+        self.opt_scheduler = t.optim.lr_scheduler.ConstantLR(self.tree_opt)
+
+        # self.opt_scheduler = t.optim.lr_scheduler.StepLR(self.tree_opt, step_size=self.args.curr, gamma=0.9)
 
 
     def _tensor_input(self, q_index:list, c_index):
@@ -154,6 +99,10 @@ class LEFT(Module):
 
     @t.no_grad()
     def prepare_leaf_embeddings(self):
+
+        if isinstance(self.tree_embs, FactorizedTreeEmbeddings):
+            self._prepare_factorized_embeddings()
+            return
 
         if len(self.args.ktype) == 1:
             ktype = self.args.ktype[0]
@@ -192,24 +141,28 @@ class LEFT(Module):
             raise NotImplementedError('only support search no more than two dimension!')
 
         # 构建父节点的embedding
-        for i in range(self.tree.leaf_startIdx - 1, -1, -1):
-
-            # 跳过无效的索引节点
-            if self.tree.node_mask[i] == 0:
-                continue
-
-            # 计算有效的孩子节点数
-            valid_leaf_num = 0
-            for j in range(self.tree.narys):
-                if self.tree.node_mask[self.tree.narys * i + (j + 1)] == 1:
-                    valid_leaf_num += 1
-
-            # 父节点的Embedding为孩子节点Embedding的平均
-            self.tree_embs.tree_node_embeddings.weight.data[i] = \
-                self.tree_embs.tree_node_embeddings.weight.data[self.tree.narys * i + 1: self.tree.narys * i + 1 + valid_leaf_num].mean(dim=0)
+        # for i in range(self.tree.leaf_startIdx - 1, -1, -1):
+        #
+        #     # 跳过无效的索引节点
+        #     if self.tree.node_mask[i] == 0:
+        #         continue
+        #
+        #     # 计算有效的孩子节点数
+        #     valid_leaf_num = 0
+        #     for j in range(self.tree.narys):
+        #         if self.tree.node_mask[self.tree.narys * i + (j + 1)] == 1:
+        #             valid_leaf_num += 1
+        #
+        #     # 父节点的Embedding为孩子节点Embedding的平均
+        #     self.tree_embs.tree_node_embeddings.weight.data[i] = \
+        #         self.tree_embs.tree_node_embeddings.weight.data[self.tree.narys * i + 1: self.tree.narys * i + 1 + valid_leaf_num].mean(dim=0)
 
         self.tree_embs.tree_node_embeddings.requires_grad_()
 
+
+    @t.no_grad()
+    def _prepare_factorized_embeddings(self):
+        self.tree_embs.prepare_leaf_embeddings(self.meta_tcom)
 
     @t.no_grad()
     def beam_search(self, q_index, beam, return_scores=False):
@@ -246,6 +199,10 @@ class LEFT(Module):
             nonleafIdx = self.tree.leaf_mask[nodeIdx] == 0
             treeNode = nodeIdx[nonleafIdx]
             treeNode = treeNode[self.tree.node_mask[treeNode] == 1]
+
+            # if all leaf node, break
+            if len(treeNode) == 0:
+                break
 
             # search childrens and sort
             childrens = self.tree.get_children(treeNode)
