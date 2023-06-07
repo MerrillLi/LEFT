@@ -1,3 +1,4 @@
+import os
 import argparse
 import time
 import einops
@@ -69,23 +70,31 @@ def RunOnce(args, runId, runHash):
     ################
     # Train MetaTC #
     ################
-    for epoch in range(args.epochs):
+    expected_ckpt_name = f"{args.model}_{args.rank}_{seed}.pt"
+    saved_model_path = os.path.join("./saved/ntc", expected_ckpt_name)
 
-        epoch_loss = model.meta_tcom.train_one_epoch(dataModule.trainLoader())
+    if os.path.exists(saved_model_path):
+        model.load_state_dict(t.load(saved_model_path))
+        logger.info(f"Loaded {saved_model_path}")
+        monitor.params = model.state_dict()
 
-        vNRMSE, vNMAE = model.meta_tcom.valid_one_epoch(dataModule.validLoader())
-        monitor.track(epoch, model.meta_tcom.state_dict(), vNRMSE)
+    else:
+        for epoch in range(args.epochs):
+            epoch_loss = model.meta_tcom.train_one_epoch(dataModule.trainLoader())
+            vNRMSE, vNMAE = model.meta_tcom.valid_one_epoch(dataModule.validLoader())
+            monitor.track(epoch, model.meta_tcom.state_dict(), vNRMSE)
 
-        print(f"Round={runId} Epoch={epoch:02d} Loss={epoch_loss:.4f} vNRMSE={vNRMSE:.4f} vNMAE={vNMAE:.4f}")
+            if epoch % 10 == 0:
+                print(f"Round={runId} Epoch={epoch:02d} Loss={epoch_loss:.4f} vNRMSE={vNRMSE:.4f} vNMAE={vNMAE:.4f}")
 
-        if monitor.early_stop():
-            break
+            if monitor.early_stop():
+                break
 
+        t.save(monitor.params, saved_model_path)
 
     # Test
     model.meta_tcom.load_state_dict(monitor.params)
     tNRMSE, tNMAE = model.meta_tcom.test_one_epoch(dataModule.testLoader())
-
     recalls = BruteForcePerf(model, dataModule, args, runId)
 
     logger.info(f"Run={runId} NRMSE={tNRMSE:.4f} NMAE={tNMAE:.4f}")

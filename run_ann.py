@@ -237,7 +237,6 @@ def RunOnce(args, runId, runHash):
     expected_ckpt_name = f"{args.model}_{args.rank}_{seed}.pt"
     saved_model_path = os.path.join("./saved", expected_ckpt_name)
 
-
     if os.path.exists(saved_model_path):
         model.load_state_dict(t.load(saved_model_path))
         logger.info(f"Loaded {saved_model_path}")

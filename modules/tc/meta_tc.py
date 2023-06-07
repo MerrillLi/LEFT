@@ -67,8 +67,9 @@ class MetaTC(Module, ABC):
                 loss = self.loss(preds, reals)
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
+            self.scaler.update()
+
             losses.append(loss.item())
-            self.optimizer.step()
         return sum(losses) / len(losses)
 
     @torch.no_grad()
