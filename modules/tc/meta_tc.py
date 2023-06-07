@@ -37,6 +37,11 @@ class MetaTC(Module, ABC):
         # Misc
         self.errorMetrics = None
 
+        # AMP
+        self.amp = args.amp
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
+
+
 
     @abstractmethod
     def forward(self, uIdx, iIdx, tIdx):
@@ -56,9 +61,12 @@ class MetaTC(Module, ABC):
         for batch in trainLoader:
             self.optimizer.zero_grad()
             uIdx, iIdx, tIdx, reals = to_device(batch, self.device)
-            preds = self.forward(uIdx, iIdx, tIdx)
-            loss = self.loss(preds, reals)
-            loss.backward()
+
+            with torch.cuda.amp.autocast(enabled=self.amp):
+                preds = self.forward(uIdx, iIdx, tIdx)
+                loss = self.loss(preds, reals)
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
             losses.append(loss.item())
             self.optimizer.step()
         return sum(losses) / len(losses)
