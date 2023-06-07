@@ -18,9 +18,14 @@ class FaissIndexer:
         if self.args.index == 'LSH':
             # IndexLSH(Vector Dim, LSH Bits)
             self.index = faiss.IndexLSH(self.args.rank, self.args.LSHbits)
+
         elif self.args.index == 'HNSW':
             # IndexHNSW(Vector Dim, HNSWx)
             self.index = faiss.IndexHNSWFlat(self.args.rank, self.args.HNSWx)
+            self.index.hierarchy = 3
+            self.index.efConstruction = 200
+            self.index.efSearch = 64
+
         elif self.args.index == 'PQ':
             # IndexPQ(Vector Dim, M, nbits)
             self.index = faiss.IndexPQ(self.args.rank, self.args.PQm, self.args.PQbits)

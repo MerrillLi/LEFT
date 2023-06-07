@@ -1,22 +1,33 @@
 ## [Official Code] LEFT: Efficient Large Entries Retrieval
-This is the code for the paper "LEFT: Efficient Large Entries Retrieval in Network Monitoring" published in IEEE INFOCOM 2024.
+This is the code for the paper "LEFT: Efficient Large Entries Retrieval in Network Monitoring".
 
 ## Abstract
 balablablabalbal
 
 ## Requirements
-PyTorch, Loguru, Faiss
+PyTorch, Loguru, Faiss, Lightning
 
 ## Experiments
 
-Please refer to the *.sh file to get started with our experiments.
-```
-sh run_tc.sh
-```
+You can try to reproduce the main results in this paper by running the following commands.
 
-```
-sh run_tc.sh
-```
+1. For model selection (Table I)
+    ```
+    sh run_math.sh
+    sh run_ntc.sh
+    ```
+
+2. For retrieval performance comparison and run time (Table II & IV)
+    ```
+    sh run_ann.sh
+    sh run_left.sh
+    ```
+
+3. For hyper-parameters (Table III)
+    ```
+    sh run_hyper.sh
+    ```
+
 
 ## License
 

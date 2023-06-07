@@ -1,37 +1,48 @@
-import argparse
+import os
 import time
-import json
-
 import einops
+import argparse
 import torch as t
+import collections
+import numpy as np
 from loguru import logger
-from datasets.tensor_dataset import DataModule
-from utils.monitor import EarlyStopMonitor
+from modules.tc import get_model
+from utils.timer import PerfTimer
 from lightning import seed_everything
 from utils.logger import setup_logger
-from modules.tc import get_model
 from modules.tc.meta_tc import MetaTC
-from utils.metrics import RankMetrics
+from utils.monitor import EarlyStopMonitor
+from datasets.tensor_dataset import DataModule
 from modules.indexer.faiss_indexer import FaissIndexer
-from utils.timer import PerfTimer
+from utils.metrics import RankMetrics, get_reshape_string
 
 
 @t.no_grad()
 def FaissRankPerf(model: MetaTC, dataModule, args, runId):
+
     top20_metrics = RankMetrics(dataModule.fullset.tensor, topk=20, args=args)
     top50_metrics = RankMetrics(dataModule.fullset.tensor, topk=50, args=args)
+    top75_metrics = RankMetrics(dataModule.fullset.tensor, topk=75, args=args)
     top100_metrics = RankMetrics(dataModule.fullset.tensor, topk=100, args=args)
+    top200_metrics = RankMetrics(dataModule.fullset.tensor, topk=200, args=args)
 
     # 思路：
     # 1. 構建索引
+
+    commonTimer = PerfTimer()
+
+    commonTimer.start()
     indexer = FaissIndexer(args)
     indexer.train_indexer(model)
+    commonTimer.end()
+
 
     # 2. 查詢結果並判斷結果的準確性
-
     perfTimer20 = PerfTimer()
     perfTimer50 = PerfTimer()
+    perfTimer75 = PerfTimer()
     perfTimer100 = PerfTimer()
+    perfTimer200 = PerfTimer()
 
     if len(args.qtype) == 1:
         qtype = args.qtype[0]
@@ -47,15 +58,25 @@ def FaissRankPerf(model: MetaTC, dataModule, args, runId):
 
             perfTimer50.start()
             top50_beam = indexer.find_topk_by_query(query, topk=50)
-            perfTimer50.end()    
+            perfTimer50.end()
+
+            perfTimer75.start()
+            top75_beam = indexer.find_topk_by_query(query, topk=75)
+            perfTimer75.end()
 
             perfTimer100.start()
             top100_beam = indexer.find_topk_by_query(query, topk=100)
             perfTimer100.end()
 
+            perfTimer200.start()
+            top200_beam = indexer.find_topk_by_query(query, topk=200)
+            perfTimer200.end()
+
             top20_metrics.append(i, top20_beam)
             top50_metrics.append(i, top50_beam)
+            top75_metrics.append(i, top75_beam)
             top100_metrics.append(i, top100_beam)
+            top200_metrics.append(i, top200_beam)
 
     elif len(args.qtype) == 2:
 
@@ -83,49 +104,68 @@ def FaissRankPerf(model: MetaTC, dataModule, args, runId):
                 top50_beam = indexer.find_topk_by_query(query, topk=50)
                 perfTimer50.end()
 
+                perfTimer75.start()
+                top75_beam = indexer.find_topk_by_query(query, topk=75)
+                perfTimer75.end()
+
                 perfTimer100.start()
                 top100_beam = indexer.find_topk_by_query(query, topk=100)
                 perfTimer100.end()
 
+                perfTimer200.start()
+                top200_beam = indexer.find_topk_by_query(query, topk=200)
+                perfTimer200.end()
+
                 top20_metrics.append(idx, top20_beam)
                 top50_metrics.append(idx, top50_beam)
+                top75_metrics.append(idx, top75_beam)
                 top100_metrics.append(idx, top100_beam)
+                top200_metrics.append(idx, top200_beam)
 
     top20_recall, top20_precision, top20_fmeasure = top20_metrics.compute()
     top50_recall, top50_precision, top50_fmeasure = top50_metrics.compute()
+    top75_recall, top75_precision, top75_fmeasure = top75_metrics.compute()
     top100_recall, top100_precision, top100_fmeasure = top100_metrics.compute()
+    top200_recall, top200_precision, top200_fmeasure = top200_metrics.compute()
 
-    top20_ms, top50_ms, top100_ms = perfTimer20.compute(), perfTimer50.compute(), perfTimer100.compute()
+    top20_ms= perfTimer20.compute()
+    top50_ms = perfTimer50.compute()
+    top75_ms = perfTimer75.compute()
+    top100_ms = perfTimer100.compute()
+    top200_ms = perfTimer200.compute()
 
-    logger.info("***" * 22)
-    logger.info(f"Round={runId} {args.index} Indexer Retrieval Performance")
-    logger.info(f"Round={runId} Top  20  R={top20_recall:.4f} P={top20_precision:.4f} F={top20_fmeasure:.4f} T={top20_ms:.1f}ms")
-    logger.info(f"Round={runId} Top  50  R={top50_recall:.4f} P={top50_precision:.4f} F={top50_fmeasure:.4f} T={top50_ms:.1f}ms")
-    logger.info(f"Round={runId} Top 100  R={top100_recall:.4f} P={top100_precision:.4f} F={top100_fmeasure:.4f} T={top100_ms:.1f}ms")
-    logger.info("***" * 22)
+    recalls = [top20_recall, top50_recall, top75_recall, top100_recall, top200_recall]
+
+    ret_mss = [top20_ms, top50_ms, top75_ms, top100_ms, top200_ms]
+
+    mss = [ret_ms for ret_ms in ret_mss]
+    return recalls, mss
 
 
 @t.no_grad()
 def BruteForcePerf(model, dataModule, args, runId):
-    qtype = args.qtype
 
     fullTensor = dataModule.fullset.tensor
-
 
     commonTimer = PerfTimer()
     commonTimer.start()
     predTensor = model.infer_full_tensor(dataModule.fullLoader())
     commonTimer.end()
 
-    predTensor = einops.rearrange(predTensor, 'time user item -> (user item) (time)')
+    fmt_str = get_reshape_string(args.qtype, args.ktype)
+    predTensor = einops.rearrange(predTensor, f"time user item -> {fmt_str}")
 
     top20_metrics = RankMetrics(fullTensor, topk=20, args=args)
     top50_metrics = RankMetrics(fullTensor, topk=50, args=args)
+    top75_metrics = RankMetrics(fullTensor, topk=75, args=args)
     top100_metrics = RankMetrics(fullTensor, topk=100, args=args)
+    top200_metrics = RankMetrics(fullTensor, topk=200, args=args)
 
     top20_timer = PerfTimer()
     top50_timer = PerfTimer()
+    top75_timer = PerfTimer()
     top100_timer = PerfTimer()
+    top200_timer = PerfTimer()
 
     num_queries = 1
     for single_type in args.qtype:
@@ -141,36 +181,51 @@ def BruteForcePerf(model, dataModule, args, runId):
         top50beam = t.argsort(predTensor[i], descending=True)[:50]
         top50_timer.end()
 
+        top75_timer.start()
+        top75beam = t.argsort(predTensor[i], descending=True)[:75]
+        top75_timer.end()
+
         top100_timer.start()
         top100beam = t.argsort(predTensor[i], descending=True)[:100]
         top100_timer.end()
 
+        top200_timer.start()
+        top200beam = t.argsort(predTensor[i], descending=True)[:200]
+        top200_timer.end()
+
         top20_metrics.append(i, top20beam)
         top50_metrics.append(i, top50beam)
+        top75_metrics.append(i, top75beam)
         top100_metrics.append(i, top100beam)
+        top200_metrics.append(i, top200beam)
 
     top20_recall, top20_precision, top20_fmeasure = top20_metrics.compute()
     top50_recall, top50_precision, top50_fmeasure = top50_metrics.compute()
+    top75_recall, top75_precision, top75_fmeasure = top75_metrics.compute()
     top100_recall, top100_precision, top100_fmeasure = top100_metrics.compute()
+    top200_recall, top200_precision, top200_fmeasure = top200_metrics.compute()
 
-    top20_ms, top50_ms, top100_ms = top20_timer.compute(), top50_timer.compute(), top100_timer.compute()
+    top20_ms = top20_timer.compute()
+    top50_ms = top50_timer.compute()
+    top75_ms = top75_timer.compute()
+    top100_ms = top100_timer.compute()
+    top200_ms = top200_timer.compute()
+
     common_ms = commonTimer.compute() / num_queries
 
-    logger.info("***" * 22)
-    logger.info(f"Round={runId} Brute Force Retrieval Performance")
-    logger.info(f"Round={runId} Top  20  R={top20_recall:.4f} P={top20_precision:.4f} F={top20_fmeasure:.4f} T={common_ms+top20_ms:.1f}ms")
-    logger.info(f"Round={runId} Top  50  R={top50_recall:.4f} P={top50_precision:.4f} F={top50_fmeasure:.4f} T={common_ms+top50_ms:.1f}ms")
-    logger.info(f"Round={runId} Top 100  R={top100_recall:.4f} P={top100_precision:.4f} F={top100_fmeasure:.4f} T={common_ms+top100_ms:.1f}ms")
-    logger.info("***" * 22)
+    recalls = [top20_recall, top50_recall, top75_recall, top100_recall, top200_recall]
+    ret_mss = [top20_ms, top50_ms, top75_ms, top100_ms, top200_ms]
+    mss = [ ret_ms + common_ms for ret_ms in ret_mss]
+
+    return recalls, mss
 
 
 def RunOnce(args, runId, runHash):
 
-    seed = runId + args.seed
-
-    seed_everything(args.seed)
-
     # Initialize
+    seed = runId + args.seed
+    seed_everything(seed)
+
     model = get_model(args)
     model.setup_optimizer()
     dataModule = DataModule(args, seed=seed)
@@ -179,55 +234,87 @@ def RunOnce(args, runId, runHash):
     ################
     # Train MetaTC #
     ################
+    expected_ckpt_name = f"{args.model}_{args.rank}_{seed}.pt"
+    saved_model_path = os.path.join("./saved", expected_ckpt_name)
 
-    for epoch in range(args.epochs):
-        epoch_loss = model.train_one_epoch(dataModule.trainLoader())
-        vNRMSE, vNMAE = model.valid_one_epoch(dataModule.validLoader())
-        monitor.track(epoch, model.state_dict(), vNRMSE)
 
-        logger.info(f"Round={runId} Epoch={epoch:02d} Loss={epoch_loss:.4f} vNRMSE={vNRMSE:.4f} vNMAE={vNMAE:.4f}")
+    if os.path.exists(saved_model_path):
+        model.load_state_dict(t.load(saved_model_path))
+        logger.info(f"Loaded {saved_model_path}")
+        monitor.params = model.state_dict()
 
-        if monitor.early_stop():
-            break
+    else:
+        for epoch in range(args.epochs):
+            epoch_loss = model.train_one_epoch(dataModule.trainLoader())
+            vNRMSE, vNMAE = model.valid_one_epoch(dataModule.validLoader())
+            monitor.track(epoch, model.state_dict(), vNRMSE)
+
+            if epoch % 10 == 0:
+                print(f"Round={runId} Epoch={epoch:02d} Loss={epoch_loss:.4f} vNRMSE={vNRMSE:.4f} vNMAE={vNMAE:.4f}")
+
+            if monitor.early_stop():
+                break
+
+        t.save(monitor.params, saved_model_path)
 
     # Test
     model.load_state_dict(monitor.params)
     tNRMSE, tNMAE = model.test_one_epoch(dataModule.testLoader())
     logger.info(f"Round={runId} tNRMSE={tNRMSE:.4f} tNMAE={tNMAE:.4f}")
 
-    # Save
-    t.save(model.state_dict(), f"./results/Faiss/{args.model}_{runHash}.pt")
-
     # Brute Force Performance
-    BruteForcePerf(model, dataModule, args, runId)
+    recalls, mss = BruteForcePerf(model, dataModule, args, runId)
+    brute_metrics = {
+        'NRMSE': tNRMSE,
+        'NMAE': tNMAE,
+        'BF-Recall@20': recalls[0],
+        'BF-Recall@50': recalls[1],
+        'BF-Recall@75': recalls[2],
+        'BF-Recall@100': recalls[3],
+        'BF-Recall@200': recalls[4],
+        'BF-Time@20': mss[0],
+        'BF-Time@50': mss[1],
+        'BF-Time@75': mss[2],
+        'BF-Time@100': mss[3],
+        'BF-Time@200': mss[4],
+    }
 
     # Faiss-based ANN Searching
-    FaissRankPerf(model, dataModule, args, runId)
-    return tNRMSE, tNMAE
+    recalls, mss = FaissRankPerf(model, dataModule, args, runId)
+    faiss_metrics = {
+        f'{args.index}-Recall@20': recalls[0],
+        f'{args.index}-Recall@50': recalls[1],
+        f'{args.index}-Recall@75': recalls[2],
+        f'{args.index}-Recall@100': recalls[3],
+        f'{args.index}-Recall@200': recalls[4],
+        f'{args.index}-Time@20': mss[0],
+        f'{args.index}-Time@50': mss[1],
+        f'{args.index}-Time@75': mss[2],
+        f'{args.index}-Time@100': mss[3],
+        f'{args.index}-Time@200': mss[4],
+    }
+
+    metrics = {}
+    metrics.update(brute_metrics)
+    metrics.update(faiss_metrics)
+
+    return metrics
 
 
 def RunExperiments(args):
 
+    metrics = collections.defaultdict(list)
+
     for runId in range(args.rounds):
         runHash = int(time.time())
-        tNRMSE, tNMAE = RunOnce(args, runId, runHash)
+        results = RunOnce(args, runId, runHash)
 
-        # Write to CSV
-        fp = open(f"./results/baselines/{runHash}.json", "w")
-        exp_logs = {
-            "RunHash": runHash,
-            "Model": args.model,
-            "Dataset": args.dataset,
-            "Window": args.window,
-            "Rank": args.rank,
-            "RunId": runId,
-            "LR": args.lr,
-            "Density": args.density,
-            "tNRMSE": tNRMSE,
-            "tNMAE": tNMAE,
-        }
-        json.dump(exp_logs, fp)
-        fp.close()
+        for key in results:
+            metrics[key].append(results[key])
+
+    logger.info('*' * 10 + 'Experiment Results:' + '*' * 10)
+    for key in metrics:
+        logger.info(f'{key}: {np.mean(metrics[key]):.4f} ± {np.std(metrics[key]):.4f}')
 
 
 if __name__ == '__main__':
@@ -244,7 +331,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='NCP')
 
     # Index Params
-    parser.add_argument('--index', type=str, default='HNSW')
+    parser.add_argument('--index', type=str, default='LSH')
     parser.add_argument('--qtype', type=list, default=['user', 'item'])
     parser.add_argument('--ktype', type=list, default=['time'])
 
@@ -252,7 +339,7 @@ if __name__ == '__main__':
     parser.add_argument('--LSHbits', type=int, default=32)
 
     # Specify for HNSW
-    parser.add_argument('--HNSWx', type=int, default=0)
+    parser.add_argument('--HNSWx', type=int, default=16)
 
     # Specify for PQ
     parser.add_argument('--PQm', type=int, default=5)
@@ -275,7 +362,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Setup Logger
-    setup_logger(args, "Faiss")
+    setup_logger(args, f"Faiss/{args.index}")
 
     # Record Experiments Config
     logger.info(args)

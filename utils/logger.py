@@ -3,6 +3,25 @@ import sys
 import time
 import warnings
 
+
+def get_log_filename(args):
+
+    if args.model == 'CPals':
+        return f"{args.dataset}_{args.density}_{args.model}_{args.rank}_{args.lmda}"
+    elif args.model == 'CPsgd':
+        return f"{args.dataset}_{args.density}_{args.model}_{args.rank}_{args.lr}"
+    elif args.model == 'NCP':
+        return f"{args.dataset}_{args.density}_{args.model}_{args.rank}"
+    elif args.model == 'NTC':
+        return f"{args.dataset}_{args.density}_{args.model}_{args.rank}_{args.channels}"
+    elif args.model == 'NTM':
+        return f"{args.dataset}_{args.density}_{args.model}_{args.rank}"
+    elif args.model == 'NTF':
+        return f"{args.dataset}_{args.density}_{args.model}_{args.rank}_{args.window}"
+    elif args.model == 'LTP':
+        return f"{args.dataset}_{args.density}_{args.model}_{args.rank}_{args.window}"
+
+
 def setup_logger(args, path):
     warnings.filterwarnings("ignore", module='pandas')
     logfilename = time.asctime()
@@ -12,4 +31,6 @@ def setup_logger(args, path):
              "<level>{message}</level>"
 
     logger.add(sys.stdout, format=format, colorize=True)
+
+    logfilename = get_log_filename(args)
     logger.add(f"./results/{path}/{args.model}/{logfilename}.log", format=format)

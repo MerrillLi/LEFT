@@ -27,9 +27,10 @@ def mock_data(size, rank):
     return tensor
 
 if __name__ == '__main__':
-    dataset = np.load('seattle.npy')
+    dataset = np.load('geant.npy')
     print(dataset.shape)
     import einops
 
+    abilene_rs = einops.rearrange(dataset, '(days ntimes) user item -> ntimes (user item) days ', days=112, ntimes=96)
     # dataset = einops.rearrange(dataset, 'u i t -> t u i')
-    # np.save('seattle.npy', dataset)
+    np.save('geant_rs.npy', abilene_rs)
