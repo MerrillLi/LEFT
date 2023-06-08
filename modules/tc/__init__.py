@@ -15,4 +15,4 @@ def get_model(args):
         model = NCP(args)
     else:
         raise NotImplementedError
-    return model
+    return model.to(args.device)

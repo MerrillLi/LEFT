@@ -21,10 +21,10 @@ class FaissIndexer:
 
         elif self.args.index == 'HNSW':
             # IndexHNSW(Vector Dim, HNSWx)
-            self.index = faiss.IndexHNSWFlat(self.args.rank, self.args.HNSWx)
-            self.index.hierarchy = 3
-            self.index.efConstruction = 200
-            self.index.efSearch = 64
+            self.index = faiss.IndexHNSWFlat(self.args.rank, self.args.HNSWx, faiss.METRIC_INNER_PRODUCT)
+            self.index.hierarchy = self.args.hierarchy
+            self.index.efConstruction = self.args.efConstruction
+            self.index.efSearch = self.args.efSearch
 
         elif self.args.index == 'PQ':
             # IndexPQ(Vector Dim, M, nbits)

@@ -7,9 +7,9 @@ class NCP(MetaTC):
 
     def __init__(self, args):
         super(NCP, self).__init__(args)
-        self.user_trans = Sequential(Linear(self.rank, self.rank), ReLU(), Linear(self.rank, self.rank))
-        self.item_trans = Sequential(Linear(self.rank, self.rank), ReLU(), Linear(self.rank, self.rank))
-        self.time_trans = Sequential(Linear(self.rank, self.rank), ReLU(), Linear(self.rank, self.rank))
+        self.user_trans = Sequential(Linear(self.rank, self.rank))#, Tanh(), Linear(self.rank, self.rank))
+        self.item_trans = Sequential(Linear(self.rank, self.rank))#, Tanh(), Linear(self.rank, self.rank))
+        self.time_trans = Sequential(Linear(self.rank, self.rank))#, Tanh(), Linear(self.rank, self.rank))
 
     def get_embeddings(self, idx, select):
         if select == "user":

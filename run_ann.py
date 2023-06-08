@@ -16,7 +16,6 @@ from datasets.tensor_dataset import DataModule
 from modules.indexer.faiss_indexer import FaissIndexer
 from utils.metrics import RankMetrics, get_reshape_string
 
-
 @t.no_grad()
 def FaissRankPerf(model: MetaTC, dataModule, args, runId):
 
@@ -234,7 +233,7 @@ def RunOnce(args, runId, runHash):
     ################
     # Train MetaTC #
     ################
-    expected_ckpt_name = f"{args.model}_{args.rank}_{seed}.pt"
+    expected_ckpt_name = f"{args.dataset}_{args.model}_{args.rank}_{seed}.pt"
     saved_model_path = os.path.join("./saved", expected_ckpt_name)
 
     if os.path.exists(saved_model_path):
@@ -259,10 +258,12 @@ def RunOnce(args, runId, runHash):
     # Test
     model.load_state_dict(monitor.params)
     tNRMSE, tNMAE = model.test_one_epoch(dataModule.testLoader())
-    logger.info(f"Round={runId} tNRMSE={tNRMSE:.4f} tNMAE={tNMAE:.4f}")
 
     # Brute Force Performance
     recalls, mss = BruteForcePerf(model, dataModule, args, runId)
+    logger.info(f"Round={runId} tNRMSE={tNRMSE:.4f} tNMAE={tNMAE:.4f}")
+    logger.info(f"Run={runId} Recall@20={recalls[0]:.4f} Recall@50={recalls[1]:.4f} Recall@75={recalls[2]:.4f} Recall@100={recalls[3]:.4f} Recall@200={recalls[4]:.4f}")
+
     brute_metrics = {
         'NRMSE': tNRMSE,
         'NMAE': tNMAE,
@@ -280,6 +281,8 @@ def RunOnce(args, runId, runHash):
 
     # Faiss-based ANN Searching
     recalls, mss = FaissRankPerf(model, dataModule, args, runId)
+
+
     faiss_metrics = {
         f'{args.index}-Recall@20': recalls[0],
         f'{args.index}-Recall@50': recalls[1],
@@ -324,39 +327,43 @@ if __name__ == '__main__':
     parser.add_argument('--rounds', type=int, default=5)
 
     # MetaTC
-    parser.add_argument('--rank', type=int, default=20)
+    parser.add_argument('--rank', type=int, default=30)
     parser.add_argument('--window', type=int, default=12)
     parser.add_argument('--channels', type=int, default=32)
     parser.add_argument('--model', type=str, default='NCP')
 
     # Index Params
-    parser.add_argument('--index', type=str, default='LSH')
-    parser.add_argument('--qtype', type=list, default=['user', 'item'])
-    parser.add_argument('--ktype', type=list, default=['time'])
+    parser.add_argument('--index', type=str, default='PQ')
+    parser.add_argument('--qtype', type=list, default=['user'])
+    parser.add_argument('--ktype', type=list, default=['item', 'time'])
 
     # Specify for LSH
-    parser.add_argument('--LSHbits', type=int, default=32)
+    parser.add_argument('--LSHbits', type=int, default=64)
 
     # Specify for HNSW
-    parser.add_argument('--HNSWx', type=int, default=16)
+    parser.add_argument('--HNSWx', type=int, default=128)
+    parser.add_argument('--hierarchy', type=int, default=4)
+    parser.add_argument('--efConstruction', type=int, default=1600)
+    parser.add_argument('--efSearch', type=int, default=800)
 
     # Specify for PQ
-    parser.add_argument('--PQm', type=int, default=5)
-    parser.add_argument('--PQbits', type=int, default=4)
+    parser.add_argument('--PQm', type=int, default=10)
+    parser.add_argument('--PQbits', type=int, default=8)
 
     # Dataset
     parser.add_argument('--density', type=float, default=0.1)
-    parser.add_argument('--num_users', type=int, default=12)
-    parser.add_argument('--num_items', type=int, default=12)
-    parser.add_argument('--num_times', type=int, default=3000)
-    parser.add_argument('--dataset', type=str, default='abilene')
+    parser.add_argument('--num_users', type=int, default=144)
+    parser.add_argument('--num_items', type=int, default=168)
+    parser.add_argument('--num_times', type=int, default=288)
+    parser.add_argument('--dataset', type=str, default='abilene_rs')
 
     # Training
-    parser.add_argument('--bs', type=int, default=256)
+    parser.add_argument('--bs', type=int, default=1024)
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--patience', type=int, default=5)
-    parser.add_argument('--device', type=str, default='cpu')
+    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--patience', type=int, default=10)
+    parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--amp', type=bool, default=True)
 
     args = parser.parse_args()
 
