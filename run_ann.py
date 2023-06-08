@@ -321,7 +321,7 @@ if __name__ == '__main__':
 
     # Experiments
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--rounds', type=int, default=5)
+    parser.add_argument('--rounds', type=int, default=1)
 
     # MetaTC
     parser.add_argument('--rank', type=int, default=20)
@@ -335,14 +335,14 @@ if __name__ == '__main__':
     parser.add_argument('--ktype', type=list, default=['time'])
 
     # Specify for LSH
-    parser.add_argument('--LSHbits', type=int, default=32)
+    parser.add_argument('--LSHbits', type=int, default=16)
 
     # Specify for HNSW
     parser.add_argument('--HNSWx', type=int, default=16)
 
     # Specify for PQ
     parser.add_argument('--PQm', type=int, default=5)
-    parser.add_argument('--PQbits', type=int, default=4)
+    parser.add_argument('--PQbits', type=int, default=5)
 
     # Dataset
     parser.add_argument('--density', type=float, default=0.1)
@@ -357,6 +357,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--patience', type=int, default=5)
     parser.add_argument('--device', type=str, default='cpu')
+    parser.add_argument('--amp', type=bool, default=False)
 
     args = parser.parse_args()
 
