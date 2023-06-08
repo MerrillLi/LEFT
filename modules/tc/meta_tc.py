@@ -68,8 +68,8 @@ class MetaTC(Module, ABC):
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
             self.scaler.update()
-
             losses.append(loss.item())
+            self.scheduler.step()
         return sum(losses) / len(losses)
 
     @torch.no_grad()
@@ -114,4 +114,6 @@ class MetaTC(Module, ABC):
 
 
     def setup_optimizer(self):
-        self.optimizer = Adam(self.parameters(), lr=self.args.lr)
+        self.optimizer = AdamW(self.parameters(), lr=self.args.lr)
+        self.scheduler = lr_scheduler.ConstantLR(self.optimizer)
+        # self.scheduler = lr_scheduler.MultiStepLR(self.optimizer, milestones=[20, 40, 60, 80], gamma=0.5)
