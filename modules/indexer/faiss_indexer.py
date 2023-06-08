@@ -34,6 +34,8 @@ class FaissIndexer:
 
     def find_topk_by_query(self, query, topk):
         query = query.reshape(1, -1)
+        if self.args.index == 'LSH':
+            faiss.normalize_L2(query)
         distance, indices = self.index.search(query, topk)
         return indices.flatten()
 
@@ -48,6 +50,8 @@ class FaissIndexer:
             index1 = t.arange(num_type1, device=device)
             embeds = model.get_embeddings(index1, ktype)
             database_embeds = embeds.cpu().numpy()
+            if self.args.index == 'LSH':
+                faiss.normalize_L2(database_embeds)
             self.index.train(database_embeds)
             self.index.add(database_embeds)
 
@@ -70,6 +74,8 @@ class FaissIndexer:
 
             database_embeds = type1_embeds_repeated * type2_embeds_repeated
             database_embeds = database_embeds.cpu().numpy()
+            if self.args.index == 'LSH':
+                faiss.normalize_L2(database_embeds)
             self.index.train(database_embeds)
             self.index.add(database_embeds)
         else:
