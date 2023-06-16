@@ -191,15 +191,13 @@ def BruteForcePerf(model, dataModule, args, runId):
 def RunOnce(args, runId, runHash):
 
     seed = runId + args.seed
-
-    seed_everything(args.seed)
+    seed_everything(seed)
 
     # Initialize
     model = LEFT(args).to(args.device)
     model.setup_optimizer()
     dataModule = DataModule(args, seed=seed)
     monitor = EarlyStopMonitor(args.patience)
-
 
     ################
     # Train MetaTC #

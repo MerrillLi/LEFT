@@ -16,6 +16,7 @@ from datasets.tensor_dataset import DataModule
 from modules.indexer.faiss_indexer import FaissIndexer
 from utils.metrics import RankMetrics, get_reshape_string
 
+
 @t.no_grad()
 def FaissRankPerf(model: MetaTC, dataModule, args, runId):
 
