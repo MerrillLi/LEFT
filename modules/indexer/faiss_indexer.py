@@ -17,7 +17,9 @@ class FaissIndexer:
 
         if self.args.index == 'LSH':
             # IndexLSH(Vector Dim, LSH Bits)
+            quantizer = faiss.IndexFlatL2(self.args.rank)
             self.index = faiss.IndexLSH(self.args.rank, self.args.LSHbits)
+            # self.index = faiss.IndexLSH(self.args.rank, self.args.LSHbits)
 
         elif self.args.index == 'HNSW':
             # IndexHNSW(Vector Dim, HNSWx)
