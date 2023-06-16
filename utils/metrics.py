@@ -92,5 +92,4 @@ def TopKRegret(beam_m, beam_2m):
     beam_m_score = torch.sum(beam_m, dim=-1)
     beam_2m_score = torch.sum(beam_2m, dim=-1)
     regret = torch.abs(beam_2m_score - beam_m_score) / beam_m.shape[0]
-    
     return regret.mean().item()

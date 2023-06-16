@@ -180,6 +180,7 @@ class LEFT(Module):
             validIdx = self.tree.node_mask[new_queue] == 1
             new_queue = new_queue[validIdx]
             if len(new_queue) > beam:
+                queue = new_queue
                 break
             else:
                 queue = new_queue

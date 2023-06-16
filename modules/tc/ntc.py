@@ -14,7 +14,7 @@ class NTC(MetaTC):
             conv_layer = Conv3d(in_channels=in_channels, out_channels=self.channels,
                                 kernel_size=2, stride=2)
             self.cnn.append(conv_layer)
-            self.cnn.append(ReLU(inplace=True))
+            self.cnn.append(ReLU())
 
         self.score = Sequential(
             LazyLinear(1),
