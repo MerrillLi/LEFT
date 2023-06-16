@@ -6,7 +6,7 @@ from modules.tc.meta_tc import MetaTC
 class NTF(MetaTC):
 
     def __init__(self, args):
-        super(NTF).__init__(args)
+        super().__init__(args)
         self.lstm = LSTM(args.rank, args.rank, batch_first=False)
         self.rainbow = t.arange(-self.window + 1, 1).reshape(1, -1).to(self.device)
         self.inter = self.layers = Sequential(

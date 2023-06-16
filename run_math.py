@@ -181,7 +181,7 @@ def RunOnce(args, runId, runHash):
         model.train(dataModule, maxIter=300, tol=1e-4, verbose=20)
     elif args.model == 'CPsgd':
         model = CPSGD(args)
-        model.train(dataModule, maxIter=1000, tol=1e-4, verbose=100)
+        model.train(dataModule, maxIter=args.epochs, tol=1e-11, verbose=1000)
     Y_hat = model.predict().ravel().cpu().numpy()
     Y = dataModule.testset.tensor.ravel()
     tNRMSE, tNMAE = ErrMetrics(Y, Y_hat)
@@ -257,7 +257,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=5e-4)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--patience', type=int, default=5)
-    parser.add_argument('--device', type=str, default='cpu')
+    parser.add_argument('--device', type=str, default='cuda')
 
     args = parser.parse_args()
 

@@ -14,6 +14,7 @@ from utils.metrics import RankMetrics
 from utils.reshape import get_reshape_string
 import collections
 
+
 @t.no_grad()
 def BruteForcePerf(model, dataModule, args, runId):
     model.eval()
@@ -57,8 +58,7 @@ def BruteForcePerf(model, dataModule, args, runId):
 def RunOnce(args, runId, runHash):
 
     seed = runId + args.seed
-
-    seed_everything(args.seed)
+    seed_everything(seed)
 
     # Initialize
     model = LEFT(args).to(args.device)
@@ -70,13 +70,13 @@ def RunOnce(args, runId, runHash):
     ################
     # Train MetaTC #
     ################
-    expected_ckpt_name = f"{args.model}_{args.rank}_{seed}.pt"
+    expected_ckpt_name = f"{args.dataset}_d{args.density}_{args.model}_r{args.rank}_s{seed}.pt"
     saved_model_path = os.path.join("./saved/ntc", expected_ckpt_name)
 
     if os.path.exists(saved_model_path):
-        model.load_state_dict(t.load(saved_model_path))
+        model.meta_tcom.load_state_dict(t.load(saved_model_path))
         logger.info(f"Loaded {saved_model_path}")
-        monitor.params = model.state_dict()
+        monitor.params = model.meta_tcom.state_dict()
 
     else:
         for epoch in range(args.epochs):
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--ktype', type=list, default=['item', 'time'])
 
     # Dataset
-    parser.add_argument('--density', type=float, default=0.02)
+    parser.add_argument('--density', type=float, default=0.002)
     parser.add_argument('--num_users', type=int, default=144)
     parser.add_argument('--num_items', type=int, default=168)
     parser.add_argument('--num_times', type=int, default=288)
@@ -159,9 +159,10 @@ if __name__ == '__main__':
     # Training
     parser.add_argument('--bs', type=int, default=256)
     parser.add_argument('--lr', type=float, default=2e-3)
-    parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--patience', type=int, default=5)
-    parser.add_argument('--device', type=str, default='cpu')
+    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--patience', type=int, default=10)
+    parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--amp', type=bool, default=True)
 
     args = parser.parse_args()
 
