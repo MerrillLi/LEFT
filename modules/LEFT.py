@@ -218,7 +218,7 @@ class LEFT(Module):
         return candidateIdx
 
 
-    def stochastic_beam_search_loss(self, q_index, beam, curriculum) -> t.Tensor:
+    def stochastic_beam_search_loss(self, q_index, beam, curriculum):
         """
         Stochastic Beam Search Loss
         :param q_index: Query Indices
@@ -259,6 +259,7 @@ class LEFT(Module):
             if depth >= curr_controller or curriculum >= 6:
                 node_mask = self.tree.node_mask[nodeIdx] == 1
                 beam_search_loss += self.loss(pred_scores[node_mask], label_scores[node_mask]) * (depth / (self.tree.depth - 1))
+                beam_search_loss += 0.1 * t.mean(t.relu(label_scores[node_mask] - pred_scores[node_mask]))# * (depth / (self.tree.depth - 1))
                 approx_heap_acc += [t.sum(pred_scores[node_mask] > label_scores[node_mask]) / len(label_scores[node_mask])]
             queue = []
             for i in range(bs):
@@ -271,6 +272,7 @@ class LEFT(Module):
             queue = t.stack(queue)
 
         heap_acc = t.mean(t.stack(approx_heap_acc))
+
         return beam_search_loss, heap_acc
 
 

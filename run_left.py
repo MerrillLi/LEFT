@@ -274,7 +274,7 @@ def RunOnce(args, runId, runHash):
     # Prepare Early Stop Monitor
     index_monitor = EarlyStopMonitor(args.patience)
 
-    model.tree_embs.setup_optimizer(select="all")
+    model.tree_embs.setup_optimizer(select="all", lr=5e-4)
     
     # Train Indexer
     for i in range(5000):
@@ -286,7 +286,7 @@ def RunOnce(args, runId, runHash):
 
         # 上溯逐层学习, 使用Curriculum控制学习的层次大小
         curriculum = i // args.curr
-        sbs_loss = model.stochastic_beam_search_loss(q_index, beam=args.beam, curriculum=curriculum)
+        sbs_loss, heap_acc = model.stochastic_beam_search_loss(q_index, beam=args.beam, curriculum=curriculum)
         loss = sbs_loss
 
         # 梯度下降
@@ -303,20 +303,22 @@ def RunOnce(args, runId, runHash):
         model.tree_embs.scheduler.step()
 
         if i % 20 == 0:
-            print(f"Round={runId} Iter={i} sbs_loss={sbs_loss:.4f}")
+            print(f"Round={runId} Iter={i} sbs_loss={sbs_loss:.4f} heap_acc={heap_acc:.4f}")
             # Early Stop
-            # if i > 200:
-            #     index_monitor.track(i, model.tree_embs.state_dict(), regret)
+            if i > 200:
+                index_monitor.track(i, model.tree_embs.state_dict(), -heap_acc)
 
-        # if index_monitor.early_stop():
-        #     break
+        if index_monitor.early_stop():
+            break
 
-        if i % 100 == 0:
-            recalls, _ = RankPerf(model, dataModule, args, runId)
-            print(f"Run={runId} Recall@20={recalls[0]:.4f} Recall@50={recalls[1]:.4f} Recall@75={recalls[2]:.4f} Recall@100={recalls[3]:.4f} Recall@200={recalls[4]:.4f}")
+        # if i % 100 == 0:
+        #     recalls, _ = RankPerf(model, dataModule, args, runId)
+        #     print(f"Run={runId} Recall@20={recalls[0]:.4f} Recall@50={recalls[1]:.4f} Recall@75={recalls[2]:.4f} Recall@100={recalls[3]:.4f} Recall@200={recalls[4]:.4f}")
 
     # Test Indexer
+    model.tree_embs.load_state_dict(index_monitor.params)
     recalls, mss = RankPerf(model, dataModule, args, runId)
+    print(f"Run={runId} Recall@20={recalls[0]:.4f} Recall@50={recalls[1]:.4f} Recall@75={recalls[2]:.4f} Recall@100={recalls[3]:.4f} Recall@200={recalls[4]:.4f}")
 
     return_metrics.update({
         "LEFT-Recall@20": recalls[0],
@@ -360,7 +362,7 @@ if __name__ == '__main__':
 
     # MetaTC
     parser.add_argument('--rank', type=int, default=50)
-    parser.add_argument('--window', type=int, default=12)
+    parser.add_argument('--window', type=int, default=16)
     parser.add_argument('--channels', type=int, default=32)
     parser.add_argument('--model', type=str, default='LTP')
 
@@ -384,13 +386,11 @@ if __name__ == '__main__':
     parser.add_argument('--bs', type=int, default=256)
     parser.add_argument('--lr', type=float, default=2e-3)
     parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--patience', type=int, default=5)
+    parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--amp', type=bool, default=False)
 
     args = parser.parse_args()
-
-
 
     # Setup Logger
     setup_logger(args, "LEFT")
