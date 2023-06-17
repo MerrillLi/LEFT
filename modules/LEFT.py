@@ -4,7 +4,7 @@ from torch.nn import *
 from modules.tc import get_model, MetaTC
 from modules.indexer import SequentialIndexTree, StructIndexTree
 from modules.embed import FullTreeEmbeddings, FactorizedTreeEmbeddings, HashEmbeddings
-
+import numpy as np
 
 
 class LEFT(Module):
@@ -59,17 +59,7 @@ class LEFT(Module):
 
     def setup_optimizer(self):
         self.meta_tcom.setup_optimizer()
-
-        param_group = [
-            {'params': self.tree_embs.tree_node_embeddings.parameters(), 'lr': 0.01},
-            {'params': self.tree_embs.transform.parameters(), 'lr': 0.01}
-        ]
-        # self.tree_opt = t.optim.Adam(param_group)
-
-        self.tree_opt = t.optim.Adam(self.tree_embs.parameters(), lr=0.001)
-        self.opt_scheduler = t.optim.lr_scheduler.ConstantLR(self.tree_opt)
-
-        # self.opt_scheduler = t.optim.lr_scheduler.StepLR(self.tree_opt, step_size=self.args.curr, gamma=0.9)
+        self.tree_embs.setup_optimizer()
 
 
     def _tensor_input(self, q_index:list, c_index):
@@ -141,21 +131,21 @@ class LEFT(Module):
             raise NotImplementedError('only support search no more than two dimension!')
 
         # 构建父节点的embedding
-        # for i in range(self.tree.leaf_startIdx - 1, -1, -1):
-        #
-        #     # 跳过无效的索引节点
-        #     if self.tree.node_mask[i] == 0:
-        #         continue
-        #
-        #     # 计算有效的孩子节点数
-        #     valid_leaf_num = 0
-        #     for j in range(self.tree.narys):
-        #         if self.tree.node_mask[self.tree.narys * i + (j + 1)] == 1:
-        #             valid_leaf_num += 1
-        #
-        #     # 父节点的Embedding为孩子节点Embedding的平均
-        #     self.tree_embs.tree_node_embeddings.weight.data[i] = \
-        #         self.tree_embs.tree_node_embeddings.weight.data[self.tree.narys * i + 1: self.tree.narys * i + 1 + valid_leaf_num].mean(dim=0)
+        for i in range(self.tree.leaf_startIdx - 1, -1, -1):
+
+            # 跳过无效的索引节点
+            if self.tree.node_mask[i] == 0:
+                continue
+
+            # 计算有效的孩子节点数
+            valid_leaf_num = 0
+            for j in range(self.tree.narys):
+                if self.tree.node_mask[self.tree.narys * i + (j + 1)] == 1:
+                    valid_leaf_num += 1
+
+            # 父节点的Embedding为孩子节点Embedding的平均
+            self.tree_embs.tree_node_embeddings.weight.data[i] = \
+                self.tree_embs.tree_node_embeddings.weight.data[self.tree.narys * i + 1: self.tree.narys * i + 1 + valid_leaf_num].mean(dim=0)
 
         self.tree_embs.tree_node_embeddings.requires_grad_()
 
@@ -233,6 +223,7 @@ class LEFT(Module):
         Stochastic Beam Search Loss
         :param q_index: Query Indices
         :param beam: Beam Size on Stochastic Beam Search
+        :param curriculum: Curriculum Loss Control Parameters
         :return: Loss of Max-Heap
         """
 
@@ -252,7 +243,7 @@ class LEFT(Module):
             tensor_inputs = self._tensor_input(q_index=q_index, c_index=children)
             origin_scores = self.meta_tcom.get_score(**tensor_inputs).detach()
 
-            # Fix: 2023/05/06 - 未将无效的Children的Score设置为0
+            # Fix: 2023/06/05 - 未将无效的Children的Score设置为0
             origin_scores[self.tree.node_mask[children] == 0] = 0
             origin_scores = t.reshape(origin_scores, (len(nodeIdx), self.tree.narys, -1))
             label_scores = t.max(origin_scores, dim=1)[0]
@@ -261,12 +252,11 @@ class LEFT(Module):
             pred_scores = self.meta_tcom.get_score(**tensor_inputs)
 
             # Maskout the Node which is not valid in tree (to handle non full tree)
-            node_mask = self.tree.node_mask[nodeIdx] == 1
-
-            if depth >= self.tree.depth - 1 - (curriculum * 2 + 1) or curriculum >= 3:
-                # loss weights
-                weight = 1
-                beam_search_loss += self.loss(pred_scores[node_mask], label_scores[node_mask]) * weight
+            curr_controller = self.tree.depth - 1 - (curriculum * 2 + 1)
+            # randProb = np.random.rand() > 0.8
+            if depth >= curr_controller or curriculum >= 6:
+                node_mask = self.tree.node_mask[nodeIdx] == 1
+                beam_search_loss += self.loss(pred_scores[node_mask], label_scores[node_mask]) * (depth / (self.tree.depth - 1))
 
             queue = []
             for i in range(bs):

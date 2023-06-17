@@ -99,11 +99,10 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
         for ktype in self.args.ktype:
             self.transform[ktype] = Sequential(
                 Linear(2 * rank, rank),
-                LayerNorm(rank),
                 ReLU(),
                 Dropout(p=0.2),
-                Linear(rank, rank)
-            )
+                Linear(rank, rank),
+            ).to(self.args.device)
 
 
     def initialize_subtree_index(self):
@@ -184,7 +183,7 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
                 self.subtree1_node_mask[i] = valid_flag
 
 
-    def prepare_leaf_embeddings(self, meta_tc:MetaTC):
+    def prepare_leaf_embeddings(self, meta_tc: MetaTC):
 
         # 获取当前的ktype
         ktype = self.args.ktype[0]
@@ -244,6 +243,34 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
                 # 父节点的Embedding为孩子节点Embedding的平均
                 self.tree_node_embeddings[ktype1].weight.data[i] = self.tree_node_embeddings[ktype1].weight.data[narys * i + 1: narys * i + 1 + valid_leaf_num].mean(dim=0)
 
+    def readjust_embeddings(self, select):
+        # 获取当前的Index
+        kIdx = self.args.ktype.index(select)
+
+        # 获取当前类型的数量
+        num_ktype = getattr(self.args, f'num_{select}s')
+
+        # 设置非叶子节点嵌入
+        leafstart = get_subtree_leaf_start(num_ktype, self.args.narys)
+        narys = self.args.narys
+
+        for i in range(leafstart - 1, -1, -1):
+
+            # 跳过无效的索引节点
+            subtree_node_mask = getattr(self, f'subtree{kIdx}_node_mask')
+            if subtree_node_mask[i] == 0:
+                continue
+
+            # 计算有效的孩子节点数
+            valid_leaf_num = 0
+            for j in range(narys):
+                if subtree_node_mask[narys * i + (j + 1)] == 1:
+                    valid_leaf_num += 1
+
+            # 父节点的Embedding为孩子节点Embedding的平均
+            self.tree_node_embeddings[select].weight.data[i] = self.tree_node_embeddings[select].weight.data[
+                                                              narys * i + 1: narys * i + 1 + valid_leaf_num].mean(dim=0)
+
 
     def forward(self, nodeIdx):
         # Get the node embedding
@@ -261,13 +288,28 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
         for ktype, node_embed in zip(self.args.ktype, node_embeds):
             module = self.transform[ktype]
             node_embed = module(torch.cat(node_embeds, dim=-1)) + node_embed
-            # node_embed = module(node_embed)
+            # node_embed = module(node_embed) + node_embed
             transformed.append(node_embed)
         return transformed
 
 
+    def setup_optimizer(self, lr=1e-4, select='all'):
+        if select == 'all':
+            self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+        elif select == 'time':
+            params = [
+                {'params': self.tree_node_embeddings['time'].parameters()},
+                {'params': self.transform['time'].parameters()},
+            ]
+            self.optimizer = torch.optim.Adam(params, lr=lr)
+        elif select == 'item':
+            params = [
+                {'params': self.tree_node_embeddings['item'].parameters()},
+                {'params': self.transform['item'].parameters()},
+            ]
+            self.optimizer = torch.optim.Adam(params, lr=lr)
 
-
+        self.scheduler = torch.optim.lr_scheduler.ConstantLR(self.optimizer)
 
 
 
