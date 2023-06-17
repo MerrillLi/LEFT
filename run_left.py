@@ -14,6 +14,9 @@ from utils.metrics import RankMetrics
 from utils.timer import PerfTimer
 from utils.reshape import get_reshape_string
 import collections
+from tensorboardX import SummaryWriter
+
+writer = SummaryWriter('tbx')
 
 
 @t.no_grad()
@@ -28,7 +31,7 @@ def RegretPerf(model, args):
         for i in range(eval(f'args.num_{qtype[0]}s')):
             q_index = [t.tensor(i)]
             _, scores_pred = model.beam_search(q_index, beam=args.beam, return_scores=True)
-            _, scores_refs = model.beam_search(q_index, beam=args.beam*2, return_scores=True)
+            _, scores_refs = model.beam_search(q_index, beam=args.beam*5, return_scores=True)
 
             scores_pred = scores_pred[:args.beam]
             scores_refs = scores_refs[:args.beam]
@@ -37,7 +40,7 @@ def RegretPerf(model, args):
             sum_mean = t.abs(scores_refs + scores_pred) / 2
             regret = t.sum(abs_err / sum_mean)
 
-            regrets.append(regret)
+            regrets.append(regret.item())
 
     elif len(args.qtype) == 2:
         num_type0 = eval(f'args.num_{qtype[0]}s')
@@ -49,7 +52,7 @@ def RegretPerf(model, args):
                 q_index = [t.tensor(i), t.tensor(j)]
 
                 _, scores_pred = model.beam_search(q_index, beam=args.beam, return_scores=True)
-                _, scores_refs = model.beam_search(q_index, beam=args.beam*2, return_scores=True)
+                _, scores_refs = model.beam_search(q_index, beam=args.beam*5, return_scores=True)
 
                 scores_pred = scores_pred[:args.beam]
                 scores_refs = scores_refs[:args.beam]
@@ -58,9 +61,9 @@ def RegretPerf(model, args):
                 sum_mean = t.abs(scores_refs + scores_pred) / 2
                 regret = t.sum(abs_err / sum_mean)
 
-                regrets.append(regret)
+                regrets.append(regret.item())
 
-    regret = np.sum(regrets)
+    regret = np.mean(regrets)
     return regret
 
 
@@ -224,7 +227,7 @@ def RunOnce(args, runId, runHash):
     # Train MetaTC #
     ################
     expected_ckpt_name = f"{args.dataset}_d{args.density}_{args.model}_r{args.rank}_s{seed}.pt"
-    saved_model_path = os.path.join("./saved/ntc", expected_ckpt_name)
+    saved_model_path = os.path.join(f"./saved/ntc/{args.model}", expected_ckpt_name)
 
     if os.path.exists(saved_model_path):
         logger.info(f"Round={runId} Loading Pretrained Model")
@@ -269,11 +272,13 @@ def RunOnce(args, runId, runHash):
     ######################
 
     # Prepare Leaf Embeddings
-    model.prepare_leaf_embeddings()
+    model.tree_embs.prepare_leaf_embeddings(model.meta_tcom)
 
     # Prepare Early Stop Monitor
     index_monitor = EarlyStopMonitor(args.patience)
 
+    model.tree_embs.setup_optimizer(select="all")
+    notSet = True
     # Train Indexer
     for i in range(5000):
         
@@ -283,28 +288,35 @@ def RunOnce(args, runId, runHash):
         q_index = [t.randint(low=0, high=eval(f"args.num_{qtype}s"), size=(16, )) for qtype in args.qtype]
 
         # 上溯逐层学习, 使用Curriculum控制学习的层次大小
-        sbs_loss = model.stochastic_beam_search_loss(q_index, beam=args.beam, curriculum=i // args.curr)
+        curriculum = i // args.curr
+        sbs_loss = model.stochastic_beam_search_loss(q_index, beam=args.beam, curriculum=curriculum)
         loss = sbs_loss
 
         # 梯度下降
-        model.tree_opt.zero_grad()
+        model.tree_embs.optimizer.zero_grad()
         loss.backward()
         t.nn.utils.clip_grad_norm_(model.tree_embs.parameters(), 2.0)
-        model.tree_opt.step()
-        model.opt_scheduler.step()
+
+        # Write TensorBoards
+        # for name, param in model.tree_embs.named_parameters():
+        #     if param.grad is not None:
+        #         writer.add_histogram(name, param.grad.data.cpu().numpy(), i)
+
+        model.tree_embs.optimizer.step()
+        model.tree_embs.scheduler.step()
 
         if i % 20 == 0:
-            regret = RegretPerf(model, args)
-            print(f"Round={runId} Iter={i} sbs_loss={sbs_loss:.4f} regret={regret:.4f}")
+            print(f"Round={runId} Iter={i} sbs_loss={sbs_loss:.4f}")
             # Early Stop
-            if i > 200:
-                index_monitor.track(i, model.tree_embs.state_dict(), regret)
+            # if i > 200:
+            #     index_monitor.track(i, model.tree_embs.state_dict(), regret)
 
-        if index_monitor.early_stop():
-            break
+        # if index_monitor.early_stop():
+        #     break
 
         if i % 100 == 0:
-            RankPerf(model, dataModule, args, runId)
+            recalls, _ = RankPerf(model, dataModule, args, runId)
+            print(f"Run={runId} Recall@20={recalls[0]:.4f} Recall@50={recalls[1]:.4f} Recall@75={recalls[2]:.4f} Recall@100={recalls[3]:.4f} Recall@200={recalls[4]:.4f}")
 
     # Test Indexer
     recalls, mss = RankPerf(model, dataModule, args, runId)
@@ -350,7 +362,7 @@ if __name__ == '__main__':
     parser.add_argument('--rounds', type=int, default=5)
 
     # MetaTC
-    parser.add_argument('--rank', type=int, default=20)
+    parser.add_argument('--rank', type=int, default=50)
     parser.add_argument('--window', type=int, default=12)
     parser.add_argument('--channels', type=int, default=32)
     parser.add_argument('--model', type=str, default='LTP')
@@ -358,14 +370,14 @@ if __name__ == '__main__':
     # LEFT
     parser.add_argument('--narys', type=int, default=2)
     parser.add_argument('--beam', type=int, default=50)
-    parser.add_argument('--curr', type=int, default=40)
+    parser.add_argument('--curr', type=int, default=50)
     # parser.add_argument('--qtype', type=list, default=['user', 'item'])
     # parser.add_argument('--ktype', type=list, default=['time'])
     parser.add_argument('--qtype', type=list, default=['user'])
     parser.add_argument('--ktype', type=list, default=['item', 'time'])
 
     # Dataset
-    parser.add_argument('--density', type=float, default=0.02)
+    parser.add_argument('--density', type=float, default=0.2)
     parser.add_argument('--num_users', type=int, default=99)
     parser.add_argument('--num_items', type=int, default=99)
     parser.add_argument('--num_times', type=int, default=688)
@@ -376,7 +388,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=2e-3)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--patience', type=int, default=5)
-    parser.add_argument('--device', type=str, default='cpu')
+    parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--amp', type=bool, default=False)
 
     args = parser.parse_args()

@@ -56,10 +56,23 @@ class DataModule:
         self.testset = testset
         self.fullset = fullset
 
-        self.trainloader = DataLoader(trainset, batch_size=args.bs, shuffle=True, num_workers=6, pin_memory=True, persistent_workers=True, prefetch_factor=8)
-        self.validloader = DataLoader(validset, batch_size=args.bs * 8, shuffle=False)
-        self.testloader = DataLoader(testset, batch_size=args.bs * 8, shuffle=False)
-        self.fullloader = DataLoader(fullset, batch_size=args.bs * 8, shuffle=False)
+
+        kwargs = {
+            'num_workers': 16,
+            'persistent_workers': True,
+            'prefetch_factor': 16
+        }
+
+        debug_kwargs = {
+
+        }
+
+        loader_kwargs = debug_kwargs
+
+        self.trainloader = DataLoader(trainset, batch_size=args.bs, shuffle=True, **loader_kwargs)
+        self.validloader = DataLoader(validset, batch_size=args.bs * 16, shuffle=False, **loader_kwargs)
+        self.testloader = DataLoader(testset, batch_size=args.bs * 16, shuffle=False, **loader_kwargs)
+        self.fullloader = DataLoader(fullset, batch_size=args.bs * 16, shuffle=False, **loader_kwargs)
 
     def trainLoader(self):
         return self.trainloader

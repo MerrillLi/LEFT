@@ -24,3 +24,7 @@ class TreeEmbeddings(Module, ABC):
     @abstractmethod
     def forward(self, nodeIdx):
         ...
+
+    @abstractmethod
+    def setup_optimizer(self):
+        ...
