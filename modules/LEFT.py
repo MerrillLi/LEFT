@@ -234,6 +234,8 @@ class LEFT(Module):
         # Calculate Calibration Loss
         beam_search_loss = 0
 
+        approx_heap_acc = []
+
         for depth in range(self.tree.depth - 1):
 
             nodeIdx = queue
@@ -257,10 +259,9 @@ class LEFT(Module):
             if depth >= curr_controller or curriculum >= 6:
                 node_mask = self.tree.node_mask[nodeIdx] == 1
                 beam_search_loss += self.loss(pred_scores[node_mask], label_scores[node_mask]) * (depth / (self.tree.depth - 1))
-
+                approx_heap_acc += [t.sum(pred_scores[node_mask] > label_scores[node_mask]) / len(label_scores[node_mask])]
             queue = []
             for i in range(bs):
-
                 # Select Only the Valid Children
                 valid_children = children[i][self.tree.node_mask[children[i]] == 1]
                 num_children = len(valid_children)
@@ -269,7 +270,8 @@ class LEFT(Module):
 
             queue = t.stack(queue)
 
-        return beam_search_loss
+        heap_acc = t.mean(t.stack(approx_heap_acc))
+        return beam_search_loss, heap_acc
 
 
     def _opt_tensor_input(self, q_index:list, c_index):

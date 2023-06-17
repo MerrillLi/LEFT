@@ -14,9 +14,6 @@ from utils.metrics import RankMetrics
 from utils.timer import PerfTimer
 from utils.reshape import get_reshape_string
 import collections
-from tensorboardX import SummaryWriter
-
-writer = SummaryWriter('tbx')
 
 
 @t.no_grad()
@@ -241,7 +238,7 @@ def RunOnce(args, runId, runHash):
 
             if epoch % 10 == 0:
                 print(f"Round={runId} Epoch={epoch:02d} Loss={epoch_loss:.4f} vNRMSE={vNRMSE:.4f} vNMAE={vNMAE:.4f}")
-            
+
             if monitor.early_stop():
                 break
         t.save(monitor.params, saved_model_path)
@@ -278,10 +275,10 @@ def RunOnce(args, runId, runHash):
     index_monitor = EarlyStopMonitor(args.patience)
 
     model.tree_embs.setup_optimizer(select="all")
-    notSet = True
+    
     # Train Indexer
     for i in range(5000):
-        
+
         model.train()
 
         # 创建输入
