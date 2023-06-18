@@ -64,6 +64,7 @@ class MetaTC(Module, ABC):
 
             with torch.cuda.amp.autocast(enabled=self.amp):
                 preds = self.forward(uIdx, iIdx, tIdx)
+                preds = preds.reshape(reals.shape)
                 loss = self.loss(preds, reals)
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
@@ -81,6 +82,7 @@ class MetaTC(Module, ABC):
         for batch in validLoader:
             uIdx, iIdx, tIdx, reals = to_device(batch, self.device)
             preds = self.forward(uIdx, iIdx, tIdx)
+            preds = preds.reshape(reals.shape)
             metrics.append(reals, preds)
         return metrics.compute()
 
@@ -92,6 +94,7 @@ class MetaTC(Module, ABC):
         for batch in testLoader:
             uIdx, iIdx, tIdx, reals = to_device(batch, self.device)
             preds = self.forward(uIdx, iIdx, tIdx)
+            preds = preds.reshape(reals.shape)
             metrics.append(reals, preds)
         return metrics.compute()
 
@@ -103,6 +106,7 @@ class MetaTC(Module, ABC):
         for batch in fullLoader:
             uIdx, iIdx, tIdx, reals = to_device(batch, self.device)
             preds = self.forward(uIdx, iIdx, tIdx)
+            preds = preds.reshape(reals.shape)
             predTensor[tIdx, uIdx, iIdx] = preds
         return predTensor
 
