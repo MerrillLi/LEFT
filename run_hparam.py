@@ -121,46 +121,6 @@ def RankPerf(model, dataModule, args, runId):
 
 
 @t.no_grad()
-def BruteForcePerf(model, dataModule, args, runId):
-    model.eval()
-    fullTensor = dataModule.fullset.tensor
-    predTensor = model.meta_tcom.infer_full_tensor(dataModule.fullLoader())
-
-    predTensor = einops.rearrange(predTensor, f'time user item -> {get_reshape_string(args.qtype, args.ktype)}')
-
-    top20_metrics = RankMetrics(fullTensor, topk=20, args=args)
-    top50_metrics = RankMetrics(fullTensor, topk=50, args=args)
-    top75_metrics = RankMetrics(fullTensor, topk=75, args=args)
-    top100_metrics = RankMetrics(fullTensor, topk=100, args=args)
-    top200_metrics = RankMetrics(fullTensor, topk=200, args=args)
-
-    num_queries = 1
-    for single_type in args.qtype:
-        num_queries *= eval(f'args.num_{single_type}s')
-
-    for i in range(num_queries):
-
-        top20beam = t.argsort(predTensor[i], descending=True)[:20]
-        top50beam = t.argsort(predTensor[i], descending=True)[:50]
-        top75beam = t.argsort(predTensor[i], descending=True)[:75]
-        top100beam = t.argsort(predTensor[i], descending=True)[:100]
-        top200beam = t.argsort(predTensor[i], descending=True)[:200]
-
-        top20_metrics.append(i, top20beam)
-        top50_metrics.append(i, top50beam)
-        top75_metrics.append(i, top75beam)
-        top100_metrics.append(i, top100beam)
-        top200_metrics.append(i, top200beam)
-
-    top20_recall, top20_precision, top20_fmeasure = top20_metrics.compute()
-    top50_recall, top50_precision, top50_fmeasure = top50_metrics.compute()
-    top75_recall, top75_precision, top75_fmeasure = top75_metrics.compute()
-    top100_recall, top100_precision, top100_fmeasure = top100_metrics.compute()
-    top200_recall, top200_precision, top200_fmeasure = top200_metrics.compute()
-    return top20_recall, top50_recall, top75_recall, top100_recall, top200_recall
-
-
-@t.no_grad()
 def CoveragePerf(model, dataModule, args, runId):
     model.eval()
     qtype = args.qtype
