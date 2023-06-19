@@ -180,17 +180,17 @@ def CoveragePerf(model, dataModule, args, runId):
         for i in range(eval(f'args.num_{qtype[0]}s')):
             q_index = [t.tensor(i)]
 
-            top20beam_left = model.beam_search(q_index, beam=40)[:20]
-            top50beam_left = model.beam_search(q_index, beam=100)[:50]
-            top75beam_left = model.beam_search(q_index, beam=150)[:75]
-            top100beam_left = model.beam_search(q_index, beam=200)[:100]
-            top200beam_left = model.beam_search(q_index, beam=400)[:200]
+            top20beam_left = model.beam_search(q_index, beam=40)[:20].tolist()
+            top50beam_left = model.beam_search(q_index, beam=100)[:50].tolist()
+            top75beam_left = model.beam_search(q_index, beam=150)[:75].tolist()
+            top100beam_left = model.beam_search(q_index, beam=200)[:100].tolist()
+            top200beam_left = model.beam_search(q_index, beam=400)[:200].tolist()
 
-            top20beam_bf = t.argsort(predTensor[i], descending=True)[:20]
-            top50beam_bf = t.argsort(predTensor[i], descending=True)[:50]
-            top75beam_bf = t.argsort(predTensor[i], descending=True)[:75]
-            top100beam_bf = t.argsort(predTensor[i], descending=True)[:100]
-            top200beam_bf = t.argsort(predTensor[i], descending=True)[:200]
+            top20beam_bf = t.argsort(predTensor[i], descending=True)[:20].tolist()
+            top50beam_bf = t.argsort(predTensor[i], descending=True)[:50].tolist()
+            top75beam_bf = t.argsort(predTensor[i], descending=True)[:75].tolist()
+            top100beam_bf = t.argsort(predTensor[i], descending=True)[:100].tolist()
+            top200beam_bf = t.argsort(predTensor[i], descending=True)[:200].tolist()
 
             coverage_20.append(len(set(top20beam_left).intersection(set(top20beam_bf))) / 20)
             coverage_50.append(len(set(top50beam_left).intersection(set(top50beam_bf))) / 50)
@@ -209,17 +209,17 @@ def CoveragePerf(model, dataModule, args, runId):
 
                 q_index = [t.tensor(i), t.tensor(j)]
 
-                top20beam_left = model.beam_search(q_index, beam=40)[:20]
-                top50beam_left = model.beam_search(q_index, beam=100)[:50]
-                top75beam_left = model.beam_search(q_index, beam=150)[:75]
-                top100beam_left = model.beam_search(q_index, beam=200)[:100]
-                top200beam_left = model.beam_search(q_index, beam=400)[:200]
+                top20beam_left = model.beam_search(q_index, beam=40)[:20].tolist()
+                top50beam_left = model.beam_search(q_index, beam=100)[:50].tolist()
+                top75beam_left = model.beam_search(q_index, beam=150)[:75].tolist()
+                top100beam_left = model.beam_search(q_index, beam=200)[:100].tolist()
+                top200beam_left = model.beam_search(q_index, beam=400)[:200].tolist()
 
-                top20beam_bf = t.argsort(predTensor[i], descending=True)[:20]
-                top50beam_bf = t.argsort(predTensor[i], descending=True)[:50]
-                top75beam_bf = t.argsort(predTensor[i], descending=True)[:75]
-                top100beam_bf = t.argsort(predTensor[i], descending=True)[:100]
-                top200beam_bf = t.argsort(predTensor[i], descending=True)[:200]
+                top20beam_bf = t.argsort(predTensor[i], descending=True)[:20].tolist()
+                top50beam_bf = t.argsort(predTensor[i], descending=True)[:50].tolist()
+                top75beam_bf = t.argsort(predTensor[i], descending=True)[:75].tolist()
+                top100beam_bf = t.argsort(predTensor[i], descending=True)[:100].tolist()
+                top200beam_bf = t.argsort(predTensor[i], descending=True)[:200].tolist()
 
                 coverage_20.append(len(set(top20beam_left).intersection(set(top20beam_bf))) / 20)
                 coverage_50.append(len(set(top50beam_left).intersection(set(top50beam_bf))) / 50)
@@ -334,7 +334,7 @@ def RunOnce(args, runId, runHash):
         if i % 20 == 0:
             print(f"Round={runId} Iter={i} sbs_loss={sbs_loss:.4f} heap_acc={heap_acc:.4f}")
             # Early Stop
-            if i > 200:
+            if i > 500:
                 index_monitor.track(i, model.tree_embs.state_dict(), -heap_acc)
 
         if index_monitor.early_stop():
@@ -396,7 +396,7 @@ if __name__ == '__main__':
 
     # Experiments
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--rounds', type=int, default=5)
+    parser.add_argument('--rounds', type=int, default=1)
 
     # MetaTC
     parser.add_argument('--rank', type=int, default=50)
