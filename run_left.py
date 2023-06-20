@@ -412,6 +412,7 @@ if __name__ == '__main__':
     # parser.add_argument('--ktype', type=list, default=['time'])
     parser.add_argument('--qtype', type=list, default=['user'])
     parser.add_argument('--ktype', type=list, default=['item', 'time'])
+    parser.add_argument('--tree_type', type=str, default='cluster')
 
     # Dataset
     parser.add_argument('--density', type=float, default=0.2)

@@ -2,8 +2,8 @@ import math
 import torch as t
 from torch.nn import *
 from modules.tc import get_model, MetaTC
-from modules.indexer import SequentialIndexTree, StructIndexTree
-from modules.embed import FullTreeEmbeddings, FactorizedTreeEmbeddings, HashEmbeddings
+from modules.indexer import SequentialIndexTree, StructIndexTree, ClusterIndexTree
+from modules.embed import FullTreeEmbeddings, FactorizedTreeEmbeddings, FACTreeEmbeddings
 import numpy as np
 
 
@@ -35,24 +35,18 @@ class LEFT(Module):
 
     def _setup_index_tree(self):
 
-        # Record Tensor Size
-        size_dict = {
-            'user': self.args.num_users,
-            'item': self.args.num_items,
-            'time': self.args.num_times,
-        }
-
-        # Calculate the Repo Size
-        num_repos = 1
-        embed_chunks = 0
-        for key in size_dict:
-            if key not in self.args.qtype:
-                num_repos *= size_dict[key]
-                embed_chunks += 1
+        index_tree, tree_embeds = None, None
 
         # Init Neural Indexer Structure
-        index_tree = StructIndexTree(self.args)
-        tree_embeds = FactorizedTreeEmbeddings(self.args, index_tree)
+        if self.args.tree_type == 'sequential':
+            index_tree = SequentialIndexTree(self.args)
+            tree_embeds = FullTreeEmbeddings(self.args, index_tree)
+        elif self.args.tree_type == 'struct':
+            index_tree = StructIndexTree(self.args)
+            tree_embeds = FactorizedTreeEmbeddings(self.args, index_tree)
+        elif self.args.tree_type == 'cluster':
+            index_tree = ClusterIndexTree(self.args)
+            tree_embeds = FACTreeEmbeddings(self.args, index_tree)
 
         return index_tree, tree_embeds
 
@@ -154,6 +148,7 @@ class LEFT(Module):
     def _prepare_factorized_embeddings(self):
         self.tree_embs.prepare_leaf_embeddings(self.meta_tcom)
 
+
     @t.no_grad()
     def beam_search(self, q_index, beam, return_scores=False):
 
@@ -195,6 +190,8 @@ class LEFT(Module):
 
             # search childrens and sort
             childrens = self.tree.get_children(treeNode)
+            validIdx = self.tree.node_mask[childrens] == 1
+            childrens = childrens[validIdx]
 
             tensor_inputs = self._opt_tensor_input(q_index=q_index, c_index=childrens)
             scores = self.meta_tcom.get_score(**tensor_inputs).squeeze()

@@ -1,6 +1,7 @@
 import torch
 from torch.nn import *
 from modules.embed.meta_embeds import TreeEmbeddings
+from modules.indexer import ClusterIndexTree
 from modules.tc import MetaTC
 import math
 from einops import rearrange
@@ -37,28 +38,13 @@ def set_subtree_ids(tree, root_id, k):
             break
 
 
-
-class BatchNorm1dLast(BatchNorm1d):
-    def forward(self, input):
-        # 将输入的维度顺序调整为（batch_size, feature_dim, length）
-        if input.dim() == 2:
-            input = rearrange(input, 'b l -> b l 1')
-        input = input.permute(0, 2, 1)
-        # 调用父类的forward函数进行批归一化
-        output = super(BatchNorm1dLast, self).forward(input)
-        # 将输出的维度再次调整为（batch_size, length, feature_dim）
-        output = output.permute(0, 2, 1)
-        return output
-
-
-
-class FactorizedTreeEmbeddings(TreeEmbeddings):
+class FACTreeEmbeddings(TreeEmbeddings):
 
 
     def __init__(self, args, tree):
         super().__init__(args, tree)
         self.args = args
-        self.tree = tree
+        self.tree = tree #type:ClusterIndexTree
 
         # Initialize the embeddings
         self.initialize()
@@ -80,8 +66,12 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
 
 
     def initialize_subtree_embeddings(self):
+        """
+        通过计算子树的规模，生成树的嵌入表
+        """
         self.tree_node_embeddings = ModuleDict()
         for ktype in self.args.ktype:
+
             # 获取当前类型的数量
             num_ktype = getattr(self.args, f'num_{ktype}s')
 
@@ -94,6 +84,9 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
 
 
     def initialize_transform(self):
+        """
+        生成子树嵌入的转化器网络
+        """
         self.transform = ModuleDict()
         rank = self.args.rank
         for ktype in self.args.ktype:
@@ -156,8 +149,8 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
 
         self.subtree0_node_mask = torch.zeros((ktype0_treesize,), dtype=torch.int32)
         self.subtree0_leaf_mask = torch.zeros((ktype0_treesize,), dtype=torch.int32)
-        self.subtree0_node_mask[ktype0_leafstart: ktype0_leafstart + num_ktype0] = 1
-        self.subtree0_leaf_mask[ktype0_leafstart: ktype0_leafstart + num_ktype0] = 1
+        self.subtree0_node_mask[ktype0_leafstart: ] = 1
+        self.subtree0_leaf_mask[ktype0_leafstart: ] = 1
 
         for i in range(ktype0_leafstart - 1, -1, -1):
             valid_flag = 0
@@ -173,8 +166,8 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
 
             self.subtree1_node_mask = torch.zeros((ktype1_treesize,), dtype=torch.int32)
             self.subtree1_leaf_mask = torch.zeros((ktype1_treesize,), dtype=torch.int32)
-            self.subtree1_node_mask[ktype1_leafstart: ktype1_leafstart + num_ktype1] = 1
-            self.subtree1_leaf_mask[ktype1_leafstart: ktype1_leafstart + num_ktype1] = 1
+            self.subtree1_node_mask[ktype1_leafstart: ] = 1
+            self.subtree1_leaf_mask[ktype1_leafstart: ] = 1
 
             for i in range(ktype1_leafstart - 1, -1, -1):
                 valid_flag = 0
@@ -183,21 +176,29 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
                 self.subtree1_node_mask[i] = valid_flag
 
 
-    def prepare_leaf_embeddings(self, meta_tc: MetaTC):
+    def prepare_leaf_embeddings(self, meta_tcom:MetaTC):
 
-        # 获取当前的ktype
-        ktype = self.args.ktype[0]
+        # 获取ids和unordered_embeds
+        ids, ordered_embeds = [], []
+        for ktype in self.args.ktype:
+            id, order_embed = self.tree.cluster(meta_tcom, select=ktype)
+            ids.append(id)
+            ordered_embeds.append(order_embed)
+
+        ###############
+        # 设置ktype0  #
+        ###############
+
         # 获取当前类型的数量
-        num_ktype = getattr(self.args, f'num_{ktype}s')
-        # 获取当前类型的嵌入
-        ktype_embed = meta_tc.get_embeddings(torch.arange(num_ktype, device=self.args.device), ktype)
+        ktype0 = self.args.ktype[0]
+        num_ktype0 = getattr(self.args, f'num_{ktype0}s')
+        ktype0_embed = ordered_embeds[0]
 
         # 写入到node_embeddings子树中
         leafIdx = self.subtree0_leaf_mask == 1
-        self.tree_node_embeddings[ktype].weight.data[leafIdx].requires_grad = False
-        self.tree_node_embeddings[ktype].weight.data[leafIdx] = ktype_embed
+        self.tree_node_embeddings[ktype0].weight.data[leafIdx] = ktype0_embed
 
-        leafstart = get_subtree_leaf_start(num_ktype, self.args.narys)
+        leafstart = get_subtree_leaf_start(num_ktype0, self.args.narys)
         narys = self.args.narys
         for i in range(leafstart - 1, -1, -1):
 
@@ -212,18 +213,23 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
                     valid_leaf_num += 1
 
             # 父节点的Embedding为孩子节点Embedding的平均
-            self.tree_node_embeddings[ktype].weight.data[i] = self.tree_node_embeddings[ktype].weight.data[narys * i + 1: narys * i + 1 + valid_leaf_num].mean(dim=0)
+            self.tree_node_embeddings[ktype0].weight.data[i] = self.tree_node_embeddings[ktype0].weight.data[narys * i + 1: narys * i + 1 + valid_leaf_num].mean(dim=0)
+
 
         if len(self.args.ktype) == 2:
+            ###############
+            # 设置ktype1  #
+            ###############
+
+            # 获取当前的ktype
             ktype1 = self.args.ktype[1]
             # 获取当前类型的数量
             num_ktype1 = getattr(self.args, f'num_{ktype1}s')
             # 获取当前类型的嵌入
-            ktype1_embed = meta_tc.get_embeddings(torch.arange(num_ktype1, device=self.args.device), ktype1)
+            ktype1_embed = ordered_embeds[1]
 
-            # 写入到tree_node_embeddings子树中
+            # 写入到node_embeddings子树中
             leafIdx = self.subtree1_leaf_mask == 1
-            self.tree_node_embeddings[ktype1].weight.data[leafIdx].requires_grad = False
             self.tree_node_embeddings[ktype1].weight.data[leafIdx] = ktype1_embed
 
             leafstart = get_subtree_leaf_start(num_ktype1, self.args.narys)
@@ -244,33 +250,18 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
                 self.tree_node_embeddings[ktype1].weight.data[i] = self.tree_node_embeddings[ktype1].weight.data[narys * i + 1: narys * i + 1 + valid_leaf_num].mean(dim=0)
 
 
-    def readjust_embeddings(self, select):
-        # 获取当前的Index
-        kIdx = self.args.ktype.index(select)
+        # 设置leaf_mapp
+        if len(self.args.ktype) == 1:
+            self.tree.leaf_mapp = ids[0]
 
-        # 获取当前类型的数量
-        num_ktype = getattr(self.args, f'num_{select}s')
-
-        # 设置非叶子节点嵌入
-        leafstart = get_subtree_leaf_start(num_ktype, self.args.narys)
-        narys = self.args.narys
-
-        for i in range(leafstart - 1, -1, -1):
-
-            # 跳过无效的索引节点
-            subtree_node_mask = getattr(self, f'subtree{kIdx}_node_mask')
-            if subtree_node_mask[i] == 0:
-                continue
-
-            # 计算有效的孩子节点数
-            valid_leaf_num = 0
-            for j in range(narys):
-                if subtree_node_mask[narys * i + (j + 1)] == 1:
-                    valid_leaf_num += 1
-
-            # 父节点的Embedding为孩子节点Embedding的平均
-            self.tree_node_embeddings[select].weight.data[i] = self.tree_node_embeddings[select].weight.data[
-                                                              narys * i + 1: narys * i + 1 + valid_leaf_num].mean(dim=0)
+        else:
+            id_mapping0 = ids[0]
+            id_mapping1 = ids[1]
+            subtree_size = len(id_mapping1)
+            for id in id_mapping0:
+                startIdx = id * subtree_size
+                endIdx = startIdx + subtree_size
+                self.tree.leaf_mapp[startIdx: endIdx] = id_mapping1 + startIdx
 
 
     def forward(self, nodeIdx):
@@ -311,6 +302,24 @@ class FactorizedTreeEmbeddings(TreeEmbeddings):
             self.optimizer = torch.optim.Adam(params, lr=lr)
 
         self.scheduler = torch.optim.lr_scheduler.ConstantLR(self.optimizer)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
