@@ -265,5 +265,5 @@ class BalancedTree(MetaTree):
         self.setup_optimizer()
 
     def setup_optimizer(self):
-        self.optimizer = torch.optim.AdamW(self.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.AdamW(self.parameters(), lr=self.args.tree_lr)
         self.scheduler = torch.optim.lr_scheduler.ConstantLR(self.optimizer)
