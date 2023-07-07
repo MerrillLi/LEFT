@@ -33,6 +33,7 @@ class LTP(MetaTC):
         user_embeds = self.user_linear(user_embeds)
         item_embeds = self.item_linear(item_embeds)
         time_embeds = self.time_linear(time_embeds)
+        # time_embeds = time_embeds.reshape(item_embeds.shape)
         pred = t.sum(user_embeds * item_embeds * time_embeds, dim=-1).sigmoid()
         return pred
 

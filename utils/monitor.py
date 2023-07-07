@@ -17,7 +17,7 @@ class EarlyStopMonitor:
 
     def track(self, epoch, params, val):
         if val < self.val:
-            self.params = params
+            self.params = copy.deepcopy(params)
             self.epoch = epoch
             self.val = val
             self.counter = 0

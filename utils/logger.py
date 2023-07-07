@@ -1,6 +1,5 @@
 from loguru import logger
 import sys
-import time
 import warnings
 
 
@@ -20,11 +19,12 @@ def get_log_filename(args):
         return f"{args.dataset}_{args.density}_{args.model}_{args.rank}_{args.window}"
     elif args.model == 'LTP':
         return f"{args.dataset}_{args.density}_{args.model}_{args.rank}_{args.window}"
+    elif args.model == 'CoSTCo':
+        return f"{args.dataset}_{args.density}_{args.model}_{args.rank}_{args.channels}"
 
 
 def setup_logger(args, path):
     warnings.filterwarnings("ignore", module='pandas')
-    logfilename = time.asctime()
     logger.remove()
     format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | " \
              "<level>{level: <8}</level> | " \

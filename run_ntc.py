@@ -15,6 +15,8 @@ from utils.reshape import get_reshape_string
 import collections
 
 
+t.backends.cudnn.benchmark = True
+
 @t.no_grad()
 def BruteForcePerf(model, dataModule, args, runId):
     model.eval()
@@ -138,31 +140,30 @@ if __name__ == '__main__':
     parser.add_argument('--rank', type=int, default=20)
     parser.add_argument('--window', type=int, default=12)
     parser.add_argument('--channels', type=int, default=32)
-    parser.add_argument('--model', type=str, default='LTP')
+    parser.add_argument('--model', type=str, default='CoSTCo')
+    parser.add_argument('--eps', type=float, default=0)
 
     # LEFT
     parser.add_argument('--narys', type=int, default=2)
     parser.add_argument('--beam', type=int, default=50)
     parser.add_argument('--curr', type=int, default=40)
-    # parser.add_argument('--qtype', type=list, default=['user', 'item'])
-    # parser.add_argument('--ktype', type=list, default=['time'])
     parser.add_argument('--qtype', type=list, default=['user'])
     parser.add_argument('--ktype', type=list, default=['item', 'time'])
 
     # Dataset
-    parser.add_argument('--density', type=float, default=0.002)
+    parser.add_argument('--density', type=float, default=0.1)
     parser.add_argument('--num_users', type=int, default=144)
     parser.add_argument('--num_items', type=int, default=168)
     parser.add_argument('--num_times', type=int, default=288)
     parser.add_argument('--dataset', type=str, default='abilene_rs')
 
     # Training
-    parser.add_argument('--bs', type=int, default=256)
+    parser.add_argument('--bs', type=int, default=1024)
     parser.add_argument('--lr', type=float, default=2e-3)
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--amp', type=bool, default=True)
+    parser.add_argument('--amp', type=bool, default=False)
 
     args = parser.parse_args()
 

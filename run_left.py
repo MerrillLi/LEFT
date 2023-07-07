@@ -296,14 +296,10 @@ def RunOnce(args, runId, runHash):
     ######################
     # Train Tree Indexer #
     ######################
-
-    # Prepare Leaf Embeddings
-    model.tree_embs.prepare_leaf_embeddings(model.meta_tcom)
+    model.setup_indexer()
 
     # Prepare Early Stop Monitor
-    index_monitor = EarlyStopMonitor(args.patience)
-
-    model.tree_embs.setup_optimizer(select="all", lr=5e-4)
+    index_monitor = EarlyStopMonitor(5)
 
     # Train Indexer
     for i in range(5000):
@@ -319,33 +315,28 @@ def RunOnce(args, runId, runHash):
         loss = sbs_loss
 
         # 梯度下降
-        model.tree_embs.optimizer.zero_grad()
+        model.indexer.optimizer.zero_grad()
         loss.backward()
-        t.nn.utils.clip_grad_norm_(model.tree_embs.parameters(), 2.0)
+        t.nn.utils.clip_grad_norm_(model.indexer.parameters(), 2.0)
 
-        # Write TensorBoards
-        # for name, param in model.tree_embs.named_parameters():
-        #     if param.grad is not None:
-        #         writer.add_histogram(name, param.grad.data.cpu().numpy(), i)
-
-        model.tree_embs.optimizer.step()
-        model.tree_embs.scheduler.step()
+        model.indexer.optimizer.step()
+        model.indexer.scheduler.step()
 
         if i % 20 == 0:
             print(f"Round={runId} Iter={i} sbs_loss={sbs_loss:.4f} heap_acc={heap_acc:.4f}")
             # Early Stop
             if i > 200:
-                index_monitor.track(i, model.tree_embs.state_dict(), -heap_acc)
+                index_monitor.track(i, model.indexer.state_dict(), -heap_acc)
 
         if index_monitor.early_stop():
             break
 
-        # if i % 100 == 0:
-        #     recalls, _ = RankPerf(model, dataModule, args, runId)
-        #     print(f"Run={runId} Recall@20={recalls[0]:.4f} Recall@50={recalls[1]:.4f} Recall@75={recalls[2]:.4f} Recall@100={recalls[3]:.4f} Recall@200={recalls[4]:.4f}")
+        if i % 100 == 0:
+            recalls, _ = RankPerf(model, dataModule, args, runId)
+            print(f"Run={runId} Recall@20={recalls[0]:.4f} Recall@50={recalls[1]:.4f} Recall@75={recalls[2]:.4f} Recall@100={recalls[3]:.4f} Recall@200={recalls[4]:.4f}")
 
     # Test Indexer
-    model.tree_embs.load_state_dict(index_monitor.params)
+    model.indexer.load_state_dict(index_monitor.params)
     recalls, mss = RankPerf(model, dataModule, args, runId)
     print(f"Run={runId} Recall@20={recalls[0]:.4f} Recall@50={recalls[1]:.4f} Recall@75={recalls[2]:.4f} Recall@100={recalls[3]:.4f} Recall@200={recalls[4]:.4f}")
 
@@ -396,11 +387,11 @@ if __name__ == '__main__':
 
     # Experiments
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--rounds', type=int, default=5)
+    parser.add_argument('--rounds', type=int, default=1)
 
     # MetaTC
-    parser.add_argument('--rank', type=int, default=50)
-    parser.add_argument('--window', type=int, default=16)
+    parser.add_argument('--rank', type=int, default=20)
+    parser.add_argument('--window', type=int, default=8)
     parser.add_argument('--channels', type=int, default=32)
     parser.add_argument('--model', type=str, default='LTP')
 
@@ -408,24 +399,23 @@ if __name__ == '__main__':
     parser.add_argument('--narys', type=int, default=2)
     parser.add_argument('--beam', type=int, default=50)
     parser.add_argument('--curr', type=int, default=50)
-    # parser.add_argument('--qtype', type=list, default=['user', 'item'])
-    # parser.add_argument('--ktype', type=list, default=['time'])
-    parser.add_argument('--qtype', type=list, default=['user'])
-    parser.add_argument('--ktype', type=list, default=['item', 'time'])
+    parser.add_argument('--qtype', type=list, default=['time'])
+    parser.add_argument('--ktype', type=list, default=['user', 'item'])
+    parser.add_argument('--tree_type', type=str, default='balanced')
 
     # Dataset
-    parser.add_argument('--density', type=float, default=0.2)
-    parser.add_argument('--num_users', type=int, default=99)
-    parser.add_argument('--num_items', type=int, default=99)
-    parser.add_argument('--num_times', type=int, default=688)
-    parser.add_argument('--dataset', type=str, default='seattle')
+    parser.add_argument('--density', type=float, default=0.02)
+    parser.add_argument('--num_times', type=int, default=65)
+    parser.add_argument('--num_users', type=int, default=50)
+    parser.add_argument('--num_items', type=int, default=50)
+    parser.add_argument('--dataset', type=str, default='mock')
 
     # Training
-    parser.add_argument('--bs', type=int, default=256)
+    parser.add_argument('--bs', type=int, default=512)
     parser.add_argument('--lr', type=float, default=2e-3)
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--patience', type=int, default=10)
-    parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--device', type=str, default='cpu')
     parser.add_argument('--amp', type=bool, default=False)
 
     args = parser.parse_args()

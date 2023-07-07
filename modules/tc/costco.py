@@ -11,13 +11,14 @@ import torch as t
 from torch.nn import *
 from modules.tc.meta_tc import MetaTC
 
+
 class CoSTCo(MetaTC):
 
     def __init__(self, args):
         super(CoSTCo, self).__init__(args)
         rank = args.rank
-        self.conv1 = Sequential(LazyConv2d(self.num_channels, kernel_size=(3, 1)), ReLU())
-        self.conv2 = Sequential(LazyConv2d(self.num_channels, kernel_size=(1, rank)), ReLU())
+        self.conv1 = Sequential(LazyConv2d(self.channels, kernel_size=(3, 1)), ReLU())
+        self.conv2 = Sequential(LazyConv2d(self.channels, kernel_size=(1, rank)), ReLU())
         self.flatten = Flatten()
         self.linear = Sequential(LazyLinear(rank), ReLU())
         self.output = Sequential(LazyLinear(1), Sigmoid())
